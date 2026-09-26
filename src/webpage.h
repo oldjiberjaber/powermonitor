@@ -227,6 +227,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           <span id="dot-wifi" class="dot"></span>
           <span id="lbl-wifi" style="font-weight:600;">WiFi: Connecting...</span>
         </div>
+        <div class="pill"><span id="dot-mqtt" class="dot"></span> <span id="lbl-mqtt">MQTT: Connecting...</span></div>
         <div class="pill"><span id="dot-ina" class="dot"></span> <span id="lbl-ina">INA226: Active</span></div>
         <div class="pill"><span id="dot-sht" class="dot"></span> <span id="lbl-sht">SHT30: Active</span></div>
         <div class="pill">Uptime: <span id="lbl-uptime" style="color:var(--text-main); font-weight:600; margin-left:3px;">0h 0m</span></div>
@@ -637,6 +638,20 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         document.getElementById('dot-ina').className = data.ina_status ? 'dot' : 'dot err';
         document.getElementById('lbl-ina').innerText = data.ina_status ? 'INA226: Active' : 'INA226: Error';
 
+        // MQTT Status
+        const dotMqtt = document.getElementById('dot-mqtt');
+        const lblMqtt = document.getElementById('lbl-mqtt');
+        if (data.mqtt_connected) {
+          dotMqtt.className = 'dot';
+          lblMqtt.innerText = 'MQTT: Connected (' + (data.mqtt_server || 'Active') + ')';
+        } else if (data.mqtt_server && data.mqtt_server.length > 0) {
+          dotMqtt.className = 'dot warn';
+          lblMqtt.innerText = 'MQTT: Connecting...';
+        } else {
+          dotMqtt.className = 'dot warn';
+          lblMqtt.innerText = 'MQTT: Disabled';
+        }
+
         // WiFi Status, SSID & Signal Strength
         if (data.ssid && data.wifi_rssi !== undefined) {
           const rssi = Number(data.wifi_rssi);
@@ -743,7 +758,7 @@ const char SETUP_HTML[] PROGMEM = R"rawliteral(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Wi-Fi Setup | 24V Power Monitor</title>
+  <title>Setup | 24V Power Monitor</title>
   <style>
     :root {
       --bg-base: #0b0f19;
@@ -769,23 +784,25 @@ const char SETUP_HTML[] PROGMEM = R"rawliteral(
       border: 1px solid var(--border-card);
       border-radius: 20px;
       padding: 2rem;
-      max-width: 440px;
+      max-width: 480px;
       width: 100%;
       box-shadow: 0 20px 40px rgba(0,0,0,0.5);
     }
     .header { text-align: center; margin-bottom: 1.5rem; }
-    .header h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.35rem; }
+    .header h1 { font-size: 1.35rem; font-weight: 700; margin-bottom: 0.35rem; }
     .header p { font-size: 0.85rem; color: var(--text-muted); }
-    .form-group { margin-bottom: 1.25rem; }
-    label { display: block; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.5rem; }
+    .section-title { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--cyan); margin: 1.5rem 0 0.75rem; border-bottom: 1px solid var(--border-card); padding-bottom: 0.35rem; display: flex; align-items: center; gap: 0.5rem; }
+    .form-group { margin-bottom: 1rem; }
+    .form-row { display: grid; grid-template-columns: 2fr 1fr; gap: 0.75rem; }
+    label { display: block; font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.4rem; }
     input, select {
       width: 100%;
       background: rgba(255, 255, 255, 0.06);
       border: 1px solid var(--border-card);
       border-radius: 10px;
-      padding: 0.75rem 1rem;
+      padding: 0.7rem 0.9rem;
       color: #fff;
-      font-size: 0.95rem;
+      font-size: 0.9rem;
       outline: none;
       transition: border-color 0.2s;
     }
@@ -801,12 +818,14 @@ const char SETUP_HTML[] PROGMEM = R"rawliteral(
       border-radius: 10px;
       font-size: 0.95rem;
       cursor: pointer;
-      margin-top: 0.5rem;
+      margin-top: 1rem;
       box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
       transition: opacity 0.2s;
     }
     .btn-submit:hover { opacity: 0.9; }
     .status-msg { margin-top: 1rem; text-align: center; font-size: 0.85rem; color: var(--cyan); display: none; }
+    .nav-link { display: block; text-align: center; margin-top: 1rem; font-size: 0.8rem; color: var(--text-muted); text-decoration: none; }
+    .nav-link:hover { color: #fff; }
   </style>
 </head>
 <body>
@@ -815,13 +834,14 @@ const char SETUP_HTML[] PROGMEM = R"rawliteral(
       <div style="width:48px;height:48px;background:linear-gradient(135deg, #00d4ff, #3b82f6);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;box-shadow:0 0 20px rgba(0,212,255,0.4);">
         <svg style="width:24px;height:24px;fill:#fff;" viewBox="0 0 24 24"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98A16.88 16.88 0 0 0 12 4zm0 3.8c3.48 0 6.64 1.35 9.02 3.56L12 18.59 2.98 11.36A12.02 12.02 0 0 1 12 7.8z"/></svg>
       </div>
-      <h1>Wi-Fi Network Setup</h1>
-      <p>Configure 2.4GHz Wi-Fi for 24V Power Monitor</p>
+      <h1>System Configuration</h1>
+      <p>Wi-Fi Network & MQTT Telemetry Settings</p>
     </div>
 
     <form method="POST" action="/save-wifi" id="setupForm">
+      <div class="section-title">1. Wi-Fi Connection</div>
       <div class="form-group">
-        <label for="ssid">Select Network</label>
+        <label for="ssidSelect">Select Detected 2.4GHz Network</label>
         <select id="ssidSelect" onchange="onSelectSSID(this.value)">
           <option value="">-- Choose detected network --</option>
           {{NETWORKS}}
@@ -829,18 +849,47 @@ const char SETUP_HTML[] PROGMEM = R"rawliteral(
       </div>
 
       <div class="form-group">
-        <label for="ssidManual">Or Enter SSID Manually</label>
-        <input type="text" id="ssid" name="ssid" placeholder="Network SSID" required>
+        <label for="ssid">Or Enter SSID Manually</label>
+        <input type="text" id="ssid" name="ssid" value="{{WIFI_SSID}}" placeholder="Network SSID">
       </div>
 
       <div class="form-group">
         <label for="password">Wi-Fi Password</label>
-        <input type="password" id="password" name="password" placeholder="Enter Wi-Fi Password">
+        <input type="password" id="password" name="password" placeholder="Leave blank if unchanged / open">
       </div>
 
-      <button type="submit" class="btn-submit" id="btnSubmit">Save & Connect</button>
-      <div class="status-msg" id="statusMsg">Saving credentials and restarting monitor...</div>
+      <div class="section-title">2. MQTT Broker & LWT Settings</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="mqttServer">MQTT Broker Host / IP</label>
+          <input type="text" id="mqttServer" name="mqtt_server" value="{{MQTT_SERVER}}" placeholder="e.g. 192.168.0.2">
+        </div>
+        <div class="form-group">
+          <label for="mqttPort">Port</label>
+          <input type="number" id="mqttPort" name="mqtt_port" value="{{MQTT_PORT}}" placeholder="1883">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="mqttTopic">Base Topic Prefix</label>
+        <input type="text" id="mqttTopic" name="mqtt_topic" value="{{MQTT_TOPIC}}" placeholder="telescope/">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="mqttUser">MQTT User (Optional)</label>
+          <input type="text" id="mqttUser" name="mqtt_user" value="{{MQTT_USER}}" placeholder="Optional">
+        </div>
+        <div class="form-group">
+          <label for="mqttPass">MQTT Pass (Optional)</label>
+          <input type="password" id="mqttPass" name="mqtt_pass" placeholder="Optional">
+        </div>
+      </div>
+
+      <button type="submit" class="btn-submit" id="btnSubmit">Save Configuration & Connect</button>
+      <div class="status-msg" id="statusMsg">Saving configuration to NVS and connecting...</div>
     </form>
+    <a href="/" class="nav-link">&larr; Return to Dashboard</a>
   </div>
 
   <script>

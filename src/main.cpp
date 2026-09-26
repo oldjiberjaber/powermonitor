@@ -6,6 +6,7 @@
 #include <ESPmDNS.h>
 #include <Preferences.h>
 #include <ArduinoJson.h>
+#include <PubSubClient.h>
 #include <INA226.h>
 #include <SHT31.h>
 #include <ArduinoOTA.h>
@@ -16,7 +17,7 @@
 // ============================================================================
 // CONFIGURATION & PIN DEFINITIONS
 // ============================================================================
-#define FIRMWARE_VERSION "v1.5.0-RTOS"
+#define FIRMWARE_VERSION "v1.6.0-RTOS"
 
 #define I2C_SDA_PIN    8     // Default SDA
 #define I2C_SCL_PIN    9     // Default SCL
@@ -29,10 +30,6 @@
 #define VOLTAGE_DIP_THRESHOLD_V   22.5f   // Below 22.5V is classified as a bus dip
 #define VOLTAGE_SURGE_THRESHOLD_V 26.5f   // Above 26.5V is classified as a bus surge
 #define VOLTAGE_VALID_MIN_V       5.0f    // Ignore 0V unpowered states for dip tracking
-
-// WiFi Credentials Defaults
-const char* DEFAULT_SSID = "Jiberjaber_cm";
-const char* DEFAULT_PASS = "123g7hqa456";
 
 // Fallback SoftAP details
 const char* AP_SSID = "PowerMonitor-Setup";
@@ -47,9 +44,21 @@ WebServer server(80);
 DNSServer dnsServer;
 Preferences prefs;
 
+WiFiClient espClient;
+PubSubClient mqttClient(espClient);
+
 bool isApMode = false;
 String wifi_ssid_str = "";
 String wifi_pass_str = "";
+
+// MQTT Settings (persisted in NVS)
+String mqtt_server = "";
+uint16_t mqtt_port = 1883;
+String mqtt_topic = "telescope/";
+String mqtt_user = "";
+String mqtt_pass = "";
+unsigned long lastMqttReconnectAttempt = 0;
+unsigned long lastMqttPublishTime = 0;
 
 // FreeRTOS Mutex for thread-safe telemetry access across cores
 SemaphoreHandle_t telemMutex = NULL;
@@ -342,6 +351,95 @@ void TaskSensors(void *pvParameters) {
   }
 }
 
+String getMqttBaseTopic() {
+  String t = mqtt_topic;
+  t.trim();
+  if (t.length() == 0) t = "telescope/";
+  if (!t.endsWith("/")) t += "/";
+  return t;
+}
+
+void publishMqttTelemetry() {
+  if (!mqttClient.connected()) return;
+
+  Telemetry snap;
+  if (xSemaphoreTake(telemMutex, pdMS_TO_TICKS(20)) == pdTRUE) {
+    snap = telem;
+    xSemaphoreGive(telemMutex);
+  } else {
+    snap = telem;
+  }
+
+  JsonDocument doc;
+  doc["voltage"] = snap.voltage;
+  doc["shunt_mv"] = snap.shunt_mv;
+  doc["current"] = snap.current;
+  doc["power"] = snap.power;
+  doc["energy_wh"] = snap.energy_wh;
+  doc["total_kwh"] = snap.energy_wh / 1000.0f;
+  doc["session_wh"] = snap.session_wh;
+  doc["session_ah"] = snap.session_ah;
+
+  doc["v_ripple_mv"] = snap.v_ripple_mv;
+  doc["avg_power_1m"] = snap.avg_power_1m;
+  doc["projected_kwh_month"] = snap.projected_kwh_month;
+  doc["shunt_loss_mw"] = snap.shunt_loss_mw;
+
+  doc["temperature"] = snap.temperature;
+  doc["humidity"] = snap.humidity;
+  doc["dew_point"] = snap.dew_point;
+  doc["condensation_margin_c"] = snap.condensation_margin_c;
+
+  doc["peak_voltage"] = snap.peak_voltage;
+  doc["lowest_dip_v"] = (snap.lowest_dip_voltage < 900.0f) ? snap.lowest_dip_voltage : snap.voltage;
+  doc["dip_count"] = snap.dip_count;
+  doc["surge_count"] = snap.surge_count;
+  doc["last_dip_depth_v"] = snap.last_dip_depth_v;
+
+  doc["peak_current"] = snap.peak_current;
+  doc["peak_power"] = snap.peak_power;
+  doc["max_temp"] = snap.max_temp;
+
+  doc["uptime_sec"] = millis() / 1000;
+  doc["wifi_rssi"] = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
+  doc["free_heap"] = ESP.getFreeHeap();
+
+  String jsonPayload;
+  serializeJson(doc, jsonPayload);
+
+  String dataTopic = getMqttBaseTopic() + "powermonitor/data";
+  mqttClient.publish(dataTopic.c_str(), jsonPayload.c_str(), false);
+}
+
+bool reconnectMQTT() {
+  if (mqtt_server.length() == 0 || WiFi.status() != WL_CONNECTED) return false;
+
+  mqttClient.setServer(mqtt_server.c_str(), mqtt_port);
+  mqttClient.setBufferSize(1024);
+
+  String clientId = "PowerMonitor-" + String((uint32_t)ESP.getEfuseMac(), HEX);
+  String lwtTopic = getMqttBaseTopic() + "powermonitor/status";
+
+  Serial.printf("[MQTT] Connecting to broker %s:%d as '%s'...\n", mqtt_server.c_str(), mqtt_port, clientId.c_str());
+
+  bool connected = false;
+  if (mqtt_user.length() > 0) {
+    connected = mqttClient.connect(clientId.c_str(), mqtt_user.c_str(), mqtt_pass.c_str(), lwtTopic.c_str(), 1, true, "offline");
+  } else {
+    connected = mqttClient.connect(clientId.c_str(), lwtTopic.c_str(), 1, true, "offline");
+  }
+
+  if (connected) {
+    Serial.printf("[MQTT] Connected successfully! Retaining LWT 'online' on '%s'\n", lwtTopic.c_str());
+    mqttClient.publish(lwtTopic.c_str(), "online", true);
+    publishMqttTelemetry();
+    return true;
+  } else {
+    Serial.printf("[MQTT] Connection failed (rc=%d). Retrying in 10s...\n", mqttClient.state());
+    return false;
+  }
+}
+
 // ============================================================================
 // WEB SERVER HANDLERS
 // ============================================================================
@@ -402,6 +500,9 @@ void handleApiData() {
   doc["ip"] = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
   doc["ssid"] = WiFi.status() == WL_CONNECTED ? WiFi.SSID() : String(AP_SSID);
   doc["wifi_rssi"] = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
+  doc["mqtt_connected"] = mqttClient.connected();
+  doc["mqtt_server"] = mqtt_server;
+  doc["mqtt_topic"] = mqtt_topic;
   doc["version"] = FIRMWARE_VERSION;
   doc["build_date"] = __DATE__;
   doc["build_time"] = __TIME__;
@@ -442,7 +543,7 @@ void handleResetStats() {
   server.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Voltage transient stats reset\"}");
 }
 
-// Wi-Fi Setup & Captive Portal Handlers
+// Wi-Fi & MQTT Setup Handlers
 void handleSetup() {
   int n = WiFi.scanNetworks();
   String options = "";
@@ -459,29 +560,66 @@ void handleSetup() {
   }
   String html = String(SETUP_HTML);
   html.replace("{{NETWORKS}}", options);
+  html.replace("{{WIFI_SSID}}", wifi_ssid_str);
+  html.replace("{{MQTT_SERVER}}", mqtt_server);
+  html.replace("{{MQTT_PORT}}", String(mqtt_port));
+  html.replace("{{MQTT_TOPIC}}", mqtt_topic);
+  html.replace("{{MQTT_USER}}", mqtt_user);
   server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   server.send(200, "text/html", html);
 }
 
 void handleSaveWifi() {
-  if (server.hasArg("ssid")) {
+  if (server.hasArg("ssid") && server.arg("ssid").length() > 0) {
     String new_ssid = server.arg("ssid");
-    String new_pass = server.arg("password");
     new_ssid.trim();
-    new_pass.trim();
-
     prefs.putString("wifi_ssid", new_ssid);
-    prefs.putString("wifi_pass", new_pass);
-    Serial.printf("[WiFi] Saved new Wi-Fi credentials to NVS: SSID='%s'\n", new_ssid.c_str());
-
-    String resp = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'><meta http-equiv='refresh' content='10;url=/'><style>body{background:#0b0f19;color:#f1f5f9;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;}.card{background:rgba(18,26,44,0.9);padding:2rem;border-radius:16px;border:1px solid rgba(255,255,255,0.1);max-width:400px;box-shadow:0 10px 30px rgba(0,0,0,0.5);}h2{color:#00d4ff;margin-bottom:1rem;}p{color:#94a3b8;line-height:1.5;}</style></head><body><div class='card'><h2>Credentials Saved!</h2><p>Connecting to <b>" + new_ssid + "</b>...</p><p>The monitor is rebooting now. Please reconnect your device to <b>" + new_ssid + "</b>.</p></div></body></html>";
-
-    server.send(200, "text/html", resp);
-    delay(1500);
-    ESP.restart();
-  } else {
-    server.send(400, "text/plain", "Missing SSID parameter");
+    wifi_ssid_str = new_ssid;
   }
+  if (server.hasArg("password") && server.arg("password").length() > 0) {
+    String new_pass = server.arg("password");
+    new_pass.trim();
+    prefs.putString("wifi_pass", new_pass);
+    wifi_pass_str = new_pass;
+  }
+
+  if (server.hasArg("mqtt_server")) {
+    mqtt_server = server.arg("mqtt_server");
+    mqtt_server.trim();
+    prefs.putString("mqtt_server", mqtt_server);
+  }
+  if (server.hasArg("mqtt_port")) {
+    uint16_t p = server.arg("mqtt_port").toInt();
+    if (p > 0) {
+      mqtt_port = p;
+      prefs.putUShort("mqtt_port", mqtt_port);
+    }
+  }
+  if (server.hasArg("mqtt_topic")) {
+    mqtt_topic = server.arg("mqtt_topic");
+    mqtt_topic.trim();
+    if (mqtt_topic.length() == 0) mqtt_topic = "telescope/";
+    prefs.putString("mqtt_topic", mqtt_topic);
+  }
+  if (server.hasArg("mqtt_user")) {
+    mqtt_user = server.arg("mqtt_user");
+    mqtt_user.trim();
+    prefs.putString("mqtt_user", mqtt_user);
+  }
+  if (server.hasArg("mqtt_pass") && server.arg("mqtt_pass").length() > 0) {
+    mqtt_pass = server.arg("mqtt_pass");
+    mqtt_pass.trim();
+    prefs.putString("mqtt_pass", mqtt_pass);
+  }
+
+  Serial.printf("[Config] Saved Wi-Fi SSID='%s' & MQTT Server='%s:%d' (Topic: '%s') to NVS\n",
+                wifi_ssid_str.c_str(), mqtt_server.c_str(), mqtt_port, mqtt_topic.c_str());
+
+  String resp = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'><meta http-equiv='refresh' content='10;url=/'><style>body{background:#0b0f19;color:#f1f5f9;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;}.card{background:rgba(18,26,44,0.9);padding:2rem;border-radius:16px;border:1px solid rgba(255,255,255,0.1);max-width:400px;box-shadow:0 10px 30px rgba(0,0,0,0.5);}h2{color:#00d4ff;margin-bottom:1rem;}p{color:#94a3b8;line-height:1.5;}</style></head><body><div class='card'><h2>Configuration Saved!</h2><p>Connecting to <b>" + wifi_ssid_str + "</b>...</p><p>MQTT Broker: <b>" + (mqtt_server.length() > 0 ? mqtt_server : "Disabled") + "</b></p><p>The monitor is rebooting now.</p></div></body></html>";
+
+  server.send(200, "text/html", resp);
+  delay(1500);
+  ESP.restart();
 }
 
 void handleCaptiveRedirect() {
@@ -529,7 +667,7 @@ void handleUpdateUpload() {
 }
 
 // ============================================================================
-// FREERTOS TASK: WEB SERVER & NETWORK (CORE 0 - Priority 1)
+// FREERTOS TASK: WEB SERVER, MQTT & NETWORK (CORE 0 - Priority 1)
 // ============================================================================
 void TaskWeb(void *pvParameters) {
   unsigned long lastNvsSave = millis();
@@ -539,8 +677,27 @@ void TaskWeb(void *pvParameters) {
       dnsServer.processNextRequest();
     }
     server.handleClient();
-    if (!isApMode) {
+
+    if (!isApMode && WiFi.status() == WL_CONNECTED) {
       ArduinoOTA.handle();
+
+      // MQTT Management
+      if (mqtt_server.length() > 0) {
+        mqttClient.loop();
+
+        unsigned long now = millis();
+        if (!mqttClient.connected()) {
+          if (now - lastMqttReconnectAttempt > 10000) {
+            lastMqttReconnectAttempt = now;
+            reconnectMQTT();
+          }
+        } else {
+          if (now - lastMqttPublishTime >= 2000) {
+            lastMqttPublishTime = now;
+            publishMqttTelemetry();
+          }
+        }
+      }
     }
 
     // Periodic NVS save of energy counter (every 5 minutes)
@@ -575,8 +732,20 @@ void setup() {
   telem.energy_wh = prefs.getFloat("energy_wh", 0.0f);
   Serial.printf("[NVS] Restored Accumulated Energy: %.2f Wh\n", telem.energy_wh);
 
-  wifi_ssid_str = prefs.getString("wifi_ssid", DEFAULT_SSID);
-  wifi_pass_str = prefs.getString("wifi_pass", DEFAULT_PASS);
+  wifi_ssid_str = prefs.getString("wifi_ssid", "");
+  wifi_pass_str = prefs.getString("wifi_pass", "");
+
+  mqtt_server = prefs.getString("mqtt_server", "");
+  mqtt_port = prefs.getUShort("mqtt_port", 1883);
+  mqtt_topic = prefs.getString("mqtt_topic", "telescope/");
+  mqtt_user = prefs.getString("mqtt_user", "");
+  mqtt_pass = prefs.getString("mqtt_pass", "");
+  if (mqtt_port == 0) mqtt_port = 1883;
+  if (mqtt_topic.length() == 0) mqtt_topic = "telescope/";
+
+  if (mqtt_server.length() > 0) {
+    Serial.printf("[NVS] Restored MQTT Broker: %s:%d (Topic: %s)\n", mqtt_server.c_str(), mqtt_port, mqtt_topic.c_str());
+  }
 
   // Initialize I2C Bus at 100kHz standard speed
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 100000);
@@ -691,7 +860,7 @@ void setup() {
     1 // Core 1
   );
 
-  // Task 2: Web Server & Network pinned to Core 0 (Priority 1)
+  // Task 2: Web Server, MQTT & Network pinned to Core 0 (Priority 1)
   xTaskCreatePinnedToCore(
     TaskWeb,
     "TaskWeb",
@@ -703,7 +872,7 @@ void setup() {
   );
 
   Serial.println("[RTOS] Core 1 -> 50Hz Sensor Sampling & Transient Capture");
-  Serial.println("[RTOS] Core 0 -> Web Server, JSON API, WiFi & OTA");
+  Serial.println("[RTOS] Core 0 -> Web Server, MQTT, JSON API, WiFi & OTA");
 }
 
 void loop() {

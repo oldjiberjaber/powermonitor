@@ -33,6 +33,10 @@ An industrial-grade 24VDC power quality, energy accumulator, and enclosure clima
   - Embedded DNS server automatically launches the Wi-Fi setup captive portal (`192.168.4.1/setup`) on iOS, Android, and Windows.
   - Scans and lists 2.4GHz networks with signal strength (RSSI).
   - Selected Wi-Fi credentials are saved to persistent NVS storage.
+- **MQTT Telemetry & LWT Status Tracking**:
+  - Automatically publishes real-time JSON telemetry to base topic prefix `telescope/` (e.g. `telescope/powermonitor/data`).
+  - **Last Will and Testament (LWT)**: Retains `offline` on broker disconnection; retains `online` on `telescope/powermonitor/status` when active.
+  - Fully configurable broker host, port, username, password, base topic, and interval via `/setup`.
 - **Modern Responsive Web Dashboard**:
   - Glassmorphism dark UI with live rolling SVG charts (no external cloud/CDN dependencies).
   - Instant OTA firmware upload form (`/update`).
@@ -133,19 +137,58 @@ cd powermonitor
 pio run -e esp32-s3-devkitc-1 -t upload
 ```
 
-### 2. Wi-Fi Configuration (Captive Portal)
-1. On initial power-up, the device broadcasts a Wi-Fi hotspot named:
+### 2. Wi-Fi & MQTT Configuration (Captive Portal)
+1. On initial power-up (or when Wi-Fi is unconfigured), the device broadcasts:
    ```
    PowerMonitor-Setup
    ```
 2. Connect your phone or laptop to `PowerMonitor-Setup`.
 3. The setup page opens automatically (or navigate to `http://192.168.4.1/setup`).
-4. Select your 2.4GHz Wi-Fi network, enter the password, and click **Save & Connect**.
-5. The device saves your credentials to NVS and reboots to join your network.
+4. Select your 2.4GHz Wi-Fi network, enter credentials, configure your MQTT Broker Host/IP (e.g. `192.168.0.2`), and click **Save Configuration & Connect**.
+5. The device saves all settings to NVS and reboots into normal operating mode.
 
 ### 3. Accessing the Dashboard
 - **mDNS Hostname:** `http://powermonitor.local`
 - **Assigned Local IP:** Displayed in the serial monitor (115200 baud) and on your router's DHCP list.
+
+---
+
+## 🛰️ MQTT Topics & Telemetry Specification
+
+### 1. Availability / LWT (`telescope/powermonitor/status`)
+- **Online Payload:** `"online"` (Retained: `true`, QoS: `1`)
+- **Offline Payload (LWT):** `"offline"` (Retained: `true`, QoS: `1`)
+
+### 2. Live Telemetry (`telescope/powermonitor/data`)
+Published every 2 seconds as a consolidated JSON payload:
+
+```json
+{
+  "voltage": 24.12,
+  "shunt_mv": 0.85,
+  "current": 0.085,
+  "power": 2.05,
+  "energy_wh": 14.82,
+  "total_kwh": 0.0148,
+  "session_wh": 1.25,
+  "session_ah": 0.052,
+  "v_ripple_mv": 12.5,
+  "avg_power_1m": 2.02,
+  "projected_kwh_month": 1.48,
+  "shunt_loss_mw": 0.072,
+  "temperature": 24.8,
+  "humidity": 45.2,
+  "dew_point": 12.1,
+  "condensation_margin_c": 12.7,
+  "peak_voltage": 24.35,
+  "lowest_dip_v": 23.90,
+  "dip_count": 0,
+  "surge_count": 0,
+  "uptime_sec": 3600,
+  "wifi_rssi": -62,
+  "free_heap": 241160
+}
+```
 
 ---
 
@@ -154,7 +197,7 @@ pio run -e esp32-s3-devkitc-1 -t upload
 The monitor exposes a lightweight JSON API endpoint polled by the frontend:
 
 ### `GET /api/data`
-Returns a JSON object with real-time electrical telemetry, transient statistics, enclosure climate, and system diagnostics:
+Returns electrical telemetry, transient statistics, enclosure climate, and MQTT status:
 
 ```json
 {
@@ -186,9 +229,12 @@ Returns a JSON object with real-time electrical telemetry, transient statistics,
   "uptime_str": "1d 4h 12m",
   "ssid": "MyWiFiNetwork",
   "wifi_rssi": -62,
-  "version": "v1.5.0-RTOS",
+  "mqtt_connected": true,
+  "mqtt_server": "192.168.0.2",
+  "mqtt_topic": "telescope/",
+  "version": "v1.6.0-RTOS",
   "build_date": "Sep 27 2026",
-  "build_time": "00:18:00",
+  "build_time": "00:38:00",
   "free_heap": 241160,
   "i2c_devices": [64, 69]
 }
