@@ -1,0 +1,228 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 620" width="100%" height="100%" style="background:#0b0f19; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#0b0f19"/>
+    </linearGradient>
+    <linearGradient id="espGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="inaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1e38"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="shtGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#142834"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="pwrGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#311313"/>
+      <stop offset="100%" stop-color="#1c1917"/>
+    </linearGradient>
+    <linearGradient id="loadGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+
+    <!-- Filters for Glow / Shadows -->
+    <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000000" flood-opacity="0.5"/>
+    </filter>
+    <filter id="glowCyan" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <!-- Markers for Wire Arrowheads -->
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#ef4444"/>
+    </marker>
+    <marker id="arrowBlack" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- Title & Header Banner -->
+  <rect x="20" y="15" width="960" height="50" rx="10" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="40" y="46" fill="#f8fafc" font-size="18" font-weight="700" letter-spacing="0.5">24VDC Power Monitor &amp; Enclosure Climate System</text>
+  <text x="940" y="46" fill="#38bdf8" font-size="13" font-weight="600" text-anchor="end">ESP32-S3 + INA226 + SHT30 Wiring Schematic</text>
+
+  <!-- ==================== 1. 24V POWER SUPPLY ==================== -->
+  <g transform="translate(40, 90)" filter="url(#cardShadow)">
+    <rect width="180" height="150" rx="12" fill="url(#pwrGrad)" stroke="#ef4444" stroke-width="1.5"/>
+    <rect x="0" y="0" width="180" height="32" rx="12" fill="#ef4444" fill-opacity="0.2"/>
+    <text x="90" y="22" fill="#fca5a5" font-size="12" font-weight="700" text-anchor="middle">24V DC POWER SOURCE</text>
+    
+    <text x="90" y="65" fill="#e2e8f0" font-size="14" font-weight="700" text-anchor="middle">24V DC PSU / Battery</text>
+    <text x="90" y="85" fill="#94a3b8" font-size="11" text-anchor="middle">Main Power Rail</text>
+
+    <!-- Terminals -->
+    <circle cx="160" cy="105" r="7" fill="#ef4444"/>
+    <text x="145" y="110" fill="#fca5a5" font-size="11" font-weight="700" text-anchor="end">+24V</text>
+
+    <circle cx="160" cy="130" r="7" fill="#475569" stroke="#94a3b8" stroke-width="1"/>
+    <text x="145" y="135" fill="#cbd5e1" font-size="11" font-weight="700" text-anchor="end">0V (GND)</text>
+  </g>
+
+  <!-- ==================== 2. INA226 SENSOR MODULE ==================== -->
+  <g transform="translate(350, 90)" filter="url(#cardShadow)">
+    <rect width="280" height="230" rx="12" fill="url(#inaGrad)" stroke="#818cf8" stroke-width="1.5"/>
+    <rect x="0" y="0" width="280" height="32" rx="12" fill="#6366f1" fill-opacity="0.2"/>
+    <text x="140" y="22" fill="#c7d2fe" font-size="12" font-weight="700" text-anchor="middle">INA226 I²C POWER MONITOR (0x40)</text>
+
+    <!-- Shunt Graphic -->
+    <rect x="100" y="50" width="80" height="30" rx="6" fill="#312e81" stroke="#a5b4fc" stroke-width="1"/>
+    <text x="140" y="70" fill="#e0e7ff" font-size="11" font-weight="700" text-anchor="middle">10mΩ (R010)</text>
+
+    <!-- High-Side Power Terminals -->
+    <circle cx="20" cy="65" r="7" fill="#ef4444"/>
+    <text x="35" y="70" fill="#fca5a5" font-size="11" font-weight="700">IN+ (Vin+)</text>
+
+    <circle cx="260" cy="65" r="7" fill="#f97316"/>
+    <text x="245" y="70" fill="#fdba74" font-size="11" font-weight="700" text-anchor="end">IN- (Vin-)</text>
+
+    <circle cx="20" cy="115" r="6" fill="#38bdf8"/>
+    <text x="35" y="120" fill="#bae6fd" font-size="11" font-weight="600">VBUS (Voltage Sense)</text>
+
+    <!-- I2C & Logic Pins -->
+    <circle cx="20" cy="155" r="6" fill="#fb923c"/>
+    <text x="35" y="160" fill="#fed7aa" font-size="11" font-weight="600">VCC (3.3V)</text>
+
+    <circle cx="20" cy="180" r="6" fill="#64748b"/>
+    <text x="35" y="185" fill="#cbd5e1" font-size="11" font-weight="600">GND (Ground)</text>
+
+    <circle cx="20" cy="205" r="6" fill="#22c55e"/>
+    <text x="35" y="209" fill="#86efac" font-size="11" font-weight="600">SCL (Clock)</text>
+
+    <circle cx="140" cy="205" r="6" fill="#00d4ff"/>
+    <text x="155" y="209" fill="#67e8f9" font-size="11" font-weight="600">SDA (Data)</text>
+  </g>
+
+  <!-- ==================== 3. 24V LOAD ==================== -->
+  <g transform="translate(760, 90)" filter="url(#cardShadow)">
+    <rect width="190" height="150" rx="12" fill="url(#loadGrad)" stroke="#a855f7" stroke-width="1.5"/>
+    <rect x="0" y="0" width="190" height="32" rx="12" fill="#a855f7" fill-opacity="0.2"/>
+    <text x="95" y="22" fill="#f3e8ff" font-size="12" font-weight="700" text-anchor="middle">24V LOAD APPLIANCE</text>
+
+    <text x="95" y="65" fill="#e2e8f0" font-size="14" font-weight="700" text-anchor="middle">Telescope / Heaters</text>
+    <text x="95" y="85" fill="#94a3b8" font-size="11" text-anchor="middle">Monitored Equipment</text>
+
+    <circle cx="25" cy="105" r="7" fill="#f97316"/>
+    <text x="40" y="110" fill="#fdba74" font-size="11" font-weight="700">+24V (Load In)</text>
+
+    <circle cx="25" cy="130" r="7" fill="#475569" stroke="#94a3b8" stroke-width="1"/>
+    <text x="40" y="135" fill="#cbd5e1" font-size="11" font-weight="700">0V Return</text>
+  </g>
+
+  <!-- ==================== 4. ESP32-S3 CONTROLLER ==================== -->
+  <g transform="translate(40, 370)" filter="url(#cardShadow)">
+    <rect width="360" height="220" rx="12" fill="url(#espGrad)" stroke="#38bdf8" stroke-width="1.5"/>
+    <rect x="0" y="0" width="360" height="32" rx="12" fill="#0284c7" fill-opacity="0.2"/>
+    <text x="180" y="22" fill="#bae6fd" font-size="12" font-weight="700" text-anchor="middle">ESP32-S3 (MINI / DEVKIT) &bull; DUAL-CORE FreeRTOS</text>
+
+    <!-- Pins Left -->
+    <rect x="15" y="55" width="60" height="24" rx="4" fill="#0369a1"/>
+    <text x="45" y="71" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">USB CDC</text>
+
+    <!-- Pins Right / Internal Header -->
+    <circle cx="340" cy="65" r="6" fill="#fb923c"/>
+    <text x="325" y="70" fill="#fed7aa" font-size="11" font-weight="700" text-anchor="end">3.3V (VCC Out)</text>
+
+    <circle cx="340" cy="100" r="6" fill="#64748b"/>
+    <text x="325" y="105" fill="#cbd5e1" font-size="11" font-weight="700" text-anchor="end">GND</text>
+
+    <circle cx="340" cy="140" r="6" fill="#00d4ff"/>
+    <text x="325" y="145" fill="#67e8f9" font-size="11" font-weight="700" text-anchor="end">GPIO 8 (SDA)</text>
+
+    <circle cx="340" cy="180" r="6" fill="#22c55e"/>
+    <text x="325" y="185" fill="#86efac" font-size="11" font-weight="700" text-anchor="end">GPIO 9 (SCL)</text>
+
+    <text x="25" y="125" fill="#94a3b8" font-size="11">Core 1: 50Hz ADC &amp; Transients</text>
+    <text x="25" y="145" fill="#94a3b8" font-size="11">Core 0: Web Server, MQTT, WiFi</text>
+    <text x="25" y="180" fill="#38bdf8" font-size="11" font-weight="600">Native USB Flashing (--no-stub)</text>
+  </g>
+
+  <!-- ==================== 5. SHT30 SENSOR ==================== -->
+  <g transform="translate(620, 370)" filter="url(#cardShadow)">
+    <rect width="330" height="150" rx="12" fill="url(#shtGrad)" stroke="#10b981" stroke-width="1.5"/>
+    <rect x="0" y="0" width="330" height="32" rx="12" fill="#10b981" fill-opacity="0.2"/>
+    <text x="165" y="22" fill="#a7f3d0" font-size="12" font-weight="700" text-anchor="middle">SHT30 CLIMATE SENSOR (0x44 / 0x45)</text>
+
+    <circle cx="25" cy="55" r="6" fill="#fb923c"/>
+    <text x="40" y="60" fill="#fed7aa" font-size="11" font-weight="600">VCC (3.3V)</text>
+
+    <circle cx="25" cy="85" r="6" fill="#64748b"/>
+    <text x="40" y="90" fill="#cbd5e1" font-size="11" font-weight="600">GND</text>
+
+    <circle cx="25" cy="115" r="6" fill="#00d4ff"/>
+    <text x="40" y="119" fill="#67e8f9" font-size="11" font-weight="600">SDA (Data)</text>
+
+    <circle cx="170" cy="115" r="6" fill="#22c55e"/>
+    <text x="185" y="119" fill="#86efac" font-size="11" font-weight="600">SCL (Clock)</text>
+
+    <text x="310" y="70" fill="#94a3b8" font-size="10" text-anchor="end">Measures Enclosure Temp &amp; RH</text>
+    <text x="310" y="90" fill="#34d399" font-size="10" font-weight="600" text-anchor="end">Dew Point &amp; Condensation Margin</text>
+  </g>
+
+  <!-- ==================== WIRES & ROUTING ==================== -->
+
+  <!-- 1. +24V Supply to INA226 IN+ -->
+  <path d="M 200 195 L 290 195 L 290 155 L 370 155" fill="none" stroke="#ef4444" stroke-width="3.5" marker-end="url(#arrowRed)"/>
+  <!-- Branch to VBUS -->
+  <path d="M 290 155 L 290 205 L 370 205" fill="none" stroke="#38bdf8" stroke-width="2" stroke-dasharray="4,4"/>
+  <circle cx="290" cy="155" r="4" fill="#ef4444"/>
+
+  <!-- 2. INA226 IN- to 24V Load + -->
+  <path d="M 610 155 L 690 155 L 690 195 L 785 195" fill="none" stroke="#f97316" stroke-width="3.5" marker-end="url(#arrowRed)"/>
+
+  <!-- 3. Common Ground 0V Return (Load to Supply and to ESP32/INA226) -->
+  <path d="M 785 220 L 690 220 L 690 270 L 200 270 L 200 220" fill="none" stroke="#64748b" stroke-width="3" marker-end="url(#arrowBlack)"/>
+  <!-- Branch GND to INA226 -->
+  <path d="M 440 270 L 440 270 L 370 270" fill="none" stroke="#64748b" stroke-width="2"/>
+  <circle cx="440" cy="270" r="3.5" fill="#94a3b8"/>
+  <!-- Branch GND to ESP32 -->
+  <path d="M 440 270 L 440 470 L 380 470" fill="none" stroke="#64748b" stroke-width="2"/>
+  <!-- Branch GND to SHT30 -->
+  <path d="M 440 455 L 645 455" fill="none" stroke="#64748b" stroke-width="2"/>
+  <circle cx="440" cy="455" r="3.5" fill="#94a3b8"/>
+
+  <!-- 4. 3.3V Power Distribution (ESP32 3.3V to INA226 and SHT30) -->
+  <path d="M 380 435 L 480 435 L 480 245 L 370 245" fill="none" stroke="#fb923c" stroke-width="2"/>
+  <path d="M 480 425 L 645 425" fill="none" stroke="#fb923c" stroke-width="2"/>
+  <circle cx="480" cy="425" r="3.5" fill="#fb923c"/>
+
+  <!-- 5. I2C Bus: SDA (GPIO 8) -->
+  <path d="M 380 510 L 520 510 L 520 295 L 490 295" fill="none" stroke="#00d4ff" stroke-width="2" filter="url(#glowCyan)"/>
+  <path d="M 520 485 L 645 485" fill="none" stroke="#00d4ff" stroke-width="2" filter="url(#glowCyan)"/>
+  <circle cx="520" cy="485" r="3.5" fill="#00d4ff"/>
+
+  <!-- 6. I2C Bus: SCL (GPIO 9) -->
+  <path d="M 380 550 L 550 550 L 550 295 L 370 295" fill="none" stroke="#22c55e" stroke-width="2"/>
+  <path d="M 550 485 L 790 485" fill="none" stroke="#22c55e" stroke-width="2"/>
+  <circle cx="550" cy="485" r="3.5" fill="#22c55e"/>
+
+  <!-- Legend Box -->
+  <g transform="translate(620, 535)">
+    <rect width="330" height="60" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+    <text x="10" y="16" fill="#94a3b8" font-size="10" font-weight="700">WIRING LEGEND:</text>
+    <line x1="10" y1="28" x2="35" y2="28" stroke="#ef4444" stroke-width="3"/>
+    <text x="42" y="31" fill="#cbd5e1" font-size="10">+24V Rail</text>
+
+    <line x1="110" y1="28" x2="135" y2="28" stroke="#64748b" stroke-width="3"/>
+    <text x="142" y="31" fill="#cbd5e1" font-size="10">0V (GND)</text>
+
+    <line x1="210" y1="28" x2="235" y2="28" stroke="#fb923c" stroke-width="2"/>
+    <text x="242" y="31" fill="#cbd5e1" font-size="10">3.3V Logic</text>
+
+    <line x1="10" y1="48" x2="35" y2="48" stroke="#00d4ff" stroke-width="2"/>
+    <text x="42" y="51" fill="#cbd5e1" font-size="10">SDA (GPIO8)</text>
+
+    <line x1="110" y1="48" x2="135" y2="48" stroke="#22c55e" stroke-width="2"/>
+    <text x="142" y="51" fill="#cbd5e1" font-size="10">SCL (GPIO9)</text>
+
+    <line x1="210" y1="48" x2="235" y2="48" stroke="#38bdf8" stroke-width="2" stroke-dasharray="3,3"/>
+    <text x="242" y="51" fill="#cbd5e1" font-size="10">VBUS Sense</text>
+  </g>
+</svg>

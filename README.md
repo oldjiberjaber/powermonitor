@@ -54,55 +54,21 @@ An industrial-grade 24VDC power quality, energy accumulator, and enclosure clima
 
 ---
 
-### Pinout & Wiring Diagram
+### Complete System Wiring Schematic
 
-```
-                             +-----------------------+
-                             |   ESP32-S3 (Mini)     |
-                             |                       |
-                             |  3V3 --------------> 3.3V (VCC for Sensors)
-                             |  GND --------------> GND (System Ground)
-                             |                       |
-                             |  GPIO 8 (SDA) ------> INA226 SDA  &  SHT30 SDA
-                             |  GPIO 9 (SCL) ------> INA226 SCL  &  SHT30 SCL
-                             +-----------------------+
-```
+![24V Power & Climate Monitor Wiring Diagram](docs/wiring_diagram.svg)
 
-### INA226 High-Side Shunt Connection Schematic
+---
+
+### INA226 High-Side Shunt & Bus Voltage Connections
 
 > [!IMPORTANT]
-> The INA226 measures **High-Side** current on the 24V supply line before the load. Connect **VBUS** directly to the +24V input rail.
-
-```
-       +24V DC Power Supply (+)
-               |
-               +-----------------------+
-               |                       |
-               |                       | [VBUS pin on INA226]
-               v                       |
-         +-------------+               |
-         |  IN+ (Vin+) |               |
-         |             |               |
-         |  [ 10 mΩ ]  |  INA226       |
-         |   Shunt     |  Module       |
-         |             |               |
-         |  IN- (Vin-) |               |
-         +-------------+               |
-               |                       |
-               | (Switched/Fused)      |
-               v                       |
-          +----------+                 |
-          | 24V Load |                 |
-          +----------+                 |
-               |                       |
-               v                       |
-       0V / DC Return (GND) <----------+ (GND Reference for VBUS)
-```
+> The INA226 measures **High-Side** current on the +24V supply line before the load. Connect **VBUS** directly to the +24V input rail so it can monitor total bus voltage and transient dips.
 
 | INA226 Pin | Connects To | Description |
 | :--- | :--- | :--- |
-| **VCC** | ESP32 `3V3` | Sensor digital supply (3.3V) |
-| **GND** | ESP32 `GND` & Power Supply `0V` | Common Ground Reference |
+| **VCC** | ESP32 `3.3V` | Sensor digital supply (3.3V) |
+| **GND** | ESP32 `GND` & Power Supply `0V` | Common System Ground Reference |
 | **SDA** | ESP32 `GPIO 8` | I²C Data Line |
 | **SCL** | ESP32 `GPIO 9` | I²C Clock Line (100kHz) |
 | **IN+** | 24V Supply Positive (+) | High-side Shunt Input |
@@ -115,7 +81,7 @@ An industrial-grade 24VDC power quality, energy accumulator, and enclosure clima
 
 | SHT30 Pin | Connects To | Notes |
 | :--- | :--- | :--- |
-| **VCC** | ESP32 `3V3` | 3.3V Power |
+| **VCC** | ESP32 `3.3V` | 3.3V Power |
 | **GND** | ESP32 `GND` | Ground |
 | **SDA** | ESP32 `GPIO 8` | Shared I²C bus |
 | **SCL** | ESP32 `GPIO 9` | Shared I²C bus |
