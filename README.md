@@ -12,31 +12,31 @@ An industrial-grade 24VDC power quality, energy accumulator, and enclosure clima
 ## ⚡ Features
 
 - **Dual-Core FreeRTOS Architecture**:
-  - **Core 1 (Priority 3 - 50 Hz)**: Real-time ADC sampling, high-frequency voltage transient/dip capture, Coulomb counter integration ($Ah$, $Wh$).
+  - **Core 1 (Priority 3 - 50 Hz)**: Real-time ADC sampling, high-frequency voltage transient/dip capture, Coulomb counter integration (Ah, Wh).
   - **Core 0 (Priority 1)**: Asynchronous Web Server, REST API, DNS Captive Portal, mDNS, and OTA updates.
 - **Power Quality & Transient Analytics**:
-  - Peak-to-peak bus voltage ripple ($V_{\text{pp}}$ in mV).
-  - High-speed transient dip detection ($< 22.5\text{V}$ with 0.3V hysteresis) and lowest dip capture.
-  - Surge event tracking ($> 26.5\text{V}$).
+  - Peak-to-peak bus voltage ripple (Vpp in mV).
+  - High-speed transient dip detection (< 22.5V with 0.3V hysteresis) and lowest dip capture.
+  - Surge event tracking (> 26.5V).
   - Real-time headroom indicator to industrial 21.6V undervoltage cutoff (PLC standard).
-  - Shunt resistor $I^2R$ power loss tracking.
-  - 1-minute rolling average power filter & extrapolated monthly consumption ($kWh$).
+  - Shunt resistor I²R power loss tracking.
+  - 1-minute rolling average power filter & extrapolated monthly consumption (kWh).
 - **Energy Accumulation with Non-Volatile Persistence (NVS)**:
-  - Total Lifetime Energy ($kWh$) stored across reboots in ESP32 NVS flash.
-  - Session Charge ($Ah$) and Session Energy ($Wh$) counters since boot.
+  - Total Lifetime Energy (kWh) stored across reboots in ESP32 NVS flash.
+  - Session Charge (Ah) and Session Energy (Wh) counters since boot.
 - **Enclosure Climate & Condensation Safety Margin**:
   - Accurate Temperature & Relative Humidity.
   - Real-time Dew Point calculation using the Magnus formula.
-  - **Condensation Margin ($\Delta T_{\text{dew}} = T_{\text{enclosure}} - T_{\text{dew\_point}}$)** alerting against moisture risk on terminals/PCBs.
+  - **Condensation Margin (ΔT = Tenclosure - Tdew_point)** alerting against moisture risk on terminals/PCBs.
 - **Zero-Config Fallback Captive Portal**:
   - If Wi-Fi is unconfigured or out of range, the device broadcasts `PowerMonitor-Setup`.
   - Embedded DNS server automatically launches the Wi-Fi setup captive portal (`192.168.4.1/setup`) on iOS, Android, and Windows.
   - Scans and lists 2.4GHz networks with signal strength (RSSI).
   - Selected Wi-Fi credentials are saved to persistent NVS storage.
 - **MQTT Telemetry & LWT Status Tracking**:
-  - Automatically publishes real-time JSON telemetry to base topic prefix `telescope/` (e.g. `telescope/powermonitor/data`).
-  - **Last Will and Testament (LWT)**: Retains `offline` on broker disconnection; retains `online` on `telescope/powermonitor/status` when active.
-  - Fully configurable broker host, port, username, password, base topic, and interval via `/setup`.
+  - Automatically publishes real-time JSON telemetry to base topic prefix `telescope/` (e.g. `telescope/pmon`).
+  - **Last Will and Testament (LWT)**: Retains `Offline` on broker disconnection; retains `Online` on `tele/pmon/LWT` when active.
+  - Fully configurable device name, broker host, port, username, password, base topic, and interval via `/setup`.
 - **Modern Responsive Web Dashboard**:
   - Glassmorphism dark UI with live rolling SVG charts (no external cloud/CDN dependencies).
   - Instant OTA firmware upload form (`/update`).
@@ -48,9 +48,9 @@ An industrial-grade 24VDC power quality, energy accumulator, and enclosure clima
 
 ### Bill of Materials (BOM)
 1. **ESP32-S3 Mini / DevKit** (4MB Flash, Native USB CDC).
-2. **INA226 I²C Power Monitor Module** (with $R_{shunt} = 10\text{m}\Omega$ / `R010` resistor).
+2. **INA226 I²C Power Monitor Module** (with 10 mΩ / `R010` shunt resistor).
 3. **SHT30 I²C Temperature & Humidity Sensor** (Wemos D1 shield or standalone module).
-4. Pull-up resistors for I²C ($4.7\text{k}\Omega$ to 3.3V on SDA/SCL if not onboard).
+4. Pull-up resistors for I²C (4.7 kΩ to 3.3V on SDA/SCL if not onboard).
 
 ---
 
