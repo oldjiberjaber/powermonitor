@@ -155,15 +155,18 @@ pio run -e esp32-s3-devkitc-1 -t upload
 
 ## 🛰️ MQTT Topics & Telemetry Specification
 
-### 1. Availability / LWT (`telescope/powermonitor/status`)
-- **Online Payload:** `"online"` (Retained: `true`, QoS: `1`)
-- **Offline Payload (LWT):** `"offline"` (Retained: `true`, QoS: `1`)
+### 1. Availability / LWT (`tele/<device_name>/LWT`)
+- **Default LWT Topic:** `tele/pmon/LWT` (where `pmon` is the configurable Device Name)
+- **Online Payload:** `"Online"` (Retained: `true`, QoS: `1`)
+- **Offline Payload (LWT):** `"Offline"` (Retained: `true`, QoS: `1`)
 
-### 2. Live Telemetry (`telescope/powermonitor/data`)
-Published every 2 seconds as a consolidated JSON payload:
+### 2. Live Telemetry (`telescope/<device_name>`)
+- **Default Telemetry Topic:** `telescope/pmon` (published every 2 seconds)
+- **Consolidated JSON Payload:**
 
 ```json
 {
+  "device": "pmon",
   "voltage": 24.12,
   "shunt_mv": 0.85,
   "current": 0.085,
@@ -184,6 +187,9 @@ Published every 2 seconds as a consolidated JSON payload:
   "lowest_dip_v": 23.90,
   "dip_count": 0,
   "surge_count": 0,
+  "last_dip_depth_v": 23.90,
+  "peak_current": 0.54,
+  "peak_power": 13.0,
   "uptime_sec": 3600,
   "wifi_rssi": -62,
   "free_heap": 241160

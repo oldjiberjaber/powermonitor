@@ -52,6 +52,7 @@ String wifi_ssid_str = "";
 String wifi_pass_str = "";
 
 // MQTT Settings (persisted in NVS)
+String device_name = "pmon";
 String mqtt_server = "";
 uint16_t mqtt_port = 1883;
 String mqtt_topic = "telescope/";
@@ -371,6 +372,7 @@ void publishMqttTelemetry() {
   }
 
   JsonDocument doc;
+  doc["device"] = device_name;
   doc["voltage"] = snap.voltage;
   doc["shunt_mv"] = snap.shunt_mv;
   doc["current"] = snap.current;
@@ -407,7 +409,7 @@ void publishMqttTelemetry() {
   String jsonPayload;
   serializeJson(doc, jsonPayload);
 
-  String dataTopic = getMqttBaseTopic() + "powermonitor/data";
+  String dataTopic = getMqttBaseTopic() + device_name;
   mqttClient.publish(dataTopic.c_str(), jsonPayload.c_str(), false);
 }
 
@@ -417,21 +419,22 @@ bool reconnectMQTT() {
   mqttClient.setServer(mqtt_server.c_str(), mqtt_port);
   mqttClient.setBufferSize(1024);
 
-  String clientId = "PowerMonitor-" + String((uint32_t)ESP.getEfuseMac(), HEX);
-  String lwtTopic = getMqttBaseTopic() + "powermonitor/status";
+  String clientId = device_name + "-" + String((uint32_t)ESP.getEfuseMac(), HEX);
+  String lwtTopic = "tele/" + device_name + "/LWT";
 
-  Serial.printf("[MQTT] Connecting to broker %s:%d as '%s'...\n", mqtt_server.c_str(), mqtt_port, clientId.c_str());
+  Serial.printf("[MQTT] Connecting to %s:%d as '%s' (LWT Topic: '%s')...\n",
+                mqtt_server.c_str(), mqtt_port, clientId.c_str(), lwtTopic.c_str());
 
   bool connected = false;
   if (mqtt_user.length() > 0) {
-    connected = mqttClient.connect(clientId.c_str(), mqtt_user.c_str(), mqtt_pass.c_str(), lwtTopic.c_str(), 1, true, "offline");
+    connected = mqttClient.connect(clientId.c_str(), mqtt_user.c_str(), mqtt_pass.c_str(), lwtTopic.c_str(), 1, true, "Offline");
   } else {
-    connected = mqttClient.connect(clientId.c_str(), lwtTopic.c_str(), 1, true, "offline");
+    connected = mqttClient.connect(clientId.c_str(), lwtTopic.c_str(), 1, true, "Offline");
   }
 
   if (connected) {
-    Serial.printf("[MQTT] Connected successfully! Retaining LWT 'online' on '%s'\n", lwtTopic.c_str());
-    mqttClient.publish(lwtTopic.c_str(), "online", true);
+    Serial.printf("[MQTT] Connected successfully! Retaining LWT 'Online' on '%s'\n", lwtTopic.c_str());
+    mqttClient.publish(lwtTopic.c_str(), "Online", true);
     publishMqttTelemetry();
     return true;
   } else {
@@ -463,6 +466,7 @@ void handleApiData() {
 
   JsonDocument doc;
 
+  doc["device_name"] = device_name;
   doc["voltage"] = snap.voltage;
   doc["shunt_mv"] = snap.shunt_mv;
   doc["current"] = snap.current;
@@ -502,7 +506,8 @@ void handleApiData() {
   doc["wifi_rssi"] = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
   doc["mqtt_connected"] = mqttClient.connected();
   doc["mqtt_server"] = mqtt_server;
-  doc["mqtt_topic"] = mqtt_topic;
+  doc["mqtt_topic"] = getMqttBaseTopic() + device_name;
+  doc["mqtt_lwt_topic"] = "tele/" + device_name + "/LWT";
   doc["version"] = FIRMWARE_VERSION;
   doc["build_date"] = __DATE__;
   doc["build_time"] = __TIME__;
@@ -561,6 +566,7 @@ void handleSetup() {
   String html = String(SETUP_HTML);
   html.replace("{{NETWORKS}}", options);
   html.replace("{{WIFI_SSID}}", wifi_ssid_str);
+  html.replace("{{DEVICE_NAME}}", device_name);
   html.replace("{{MQTT_SERVER}}", mqtt_server);
   html.replace("{{MQTT_PORT}}", String(mqtt_port));
   html.replace("{{MQTT_TOPIC}}", mqtt_topic);
@@ -583,6 +589,12 @@ void handleSaveWifi() {
     wifi_pass_str = new_pass;
   }
 
+  if (server.hasArg("device_name")) {
+    device_name = server.arg("device_name");
+    device_name.trim();
+    if (device_name.length() == 0) device_name = "pmon";
+    prefs.putString("device_name", device_name);
+  }
   if (server.hasArg("mqtt_server")) {
     mqtt_server = server.arg("mqtt_server");
     mqtt_server.trim();
@@ -612,10 +624,10 @@ void handleSaveWifi() {
     prefs.putString("mqtt_pass", mqtt_pass);
   }
 
-  Serial.printf("[Config] Saved Wi-Fi SSID='%s' & MQTT Server='%s:%d' (Topic: '%s') to NVS\n",
-                wifi_ssid_str.c_str(), mqtt_server.c_str(), mqtt_port, mqtt_topic.c_str());
+  Serial.printf("[Config] Saved Wi-Fi SSID='%s', Device='%s' & MQTT Server='%s:%d' (LWT: tele/%s/LWT)\n",
+                wifi_ssid_str.c_str(), device_name.c_str(), mqtt_server.c_str(), mqtt_port, device_name.c_str());
 
-  String resp = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'><meta http-equiv='refresh' content='10;url=/'><style>body{background:#0b0f19;color:#f1f5f9;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;}.card{background:rgba(18,26,44,0.9);padding:2rem;border-radius:16px;border:1px solid rgba(255,255,255,0.1);max-width:400px;box-shadow:0 10px 30px rgba(0,0,0,0.5);}h2{color:#00d4ff;margin-bottom:1rem;}p{color:#94a3b8;line-height:1.5;}</style></head><body><div class='card'><h2>Configuration Saved!</h2><p>Connecting to <b>" + wifi_ssid_str + "</b>...</p><p>MQTT Broker: <b>" + (mqtt_server.length() > 0 ? mqtt_server : "Disabled") + "</b></p><p>The monitor is rebooting now.</p></div></body></html>";
+  String resp = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'><meta http-equiv='refresh' content='10;url=/'><style>body{background:#0b0f19;color:#f1f5f9;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;}.card{background:rgba(18,26,44,0.9);padding:2rem;border-radius:16px;border:1px solid rgba(255,255,255,0.1);max-width:400px;box-shadow:0 10px 30px rgba(0,0,0,0.5);}h2{color:#00d4ff;margin-bottom:1rem;}p{color:#94a3b8;line-height:1.5;}</style></head><body><div class='card'><h2>Configuration Saved!</h2><p>Connecting to <b>" + wifi_ssid_str + "</b>...</p><p>Device Name: <b>" + device_name + "</b> (LWT: <code>tele/" + device_name + "/LWT</code>)</p><p>The monitor is rebooting now.</p></div></body></html>";
 
   server.send(200, "text/html", resp);
   delay(1500);
@@ -735,6 +747,9 @@ void setup() {
   wifi_ssid_str = prefs.getString("wifi_ssid", "");
   wifi_pass_str = prefs.getString("wifi_pass", "");
 
+  device_name = prefs.getString("device_name", "pmon");
+  if (device_name.length() == 0) device_name = "pmon";
+
   mqtt_server = prefs.getString("mqtt_server", "");
   mqtt_port = prefs.getUShort("mqtt_port", 1883);
   mqtt_topic = prefs.getString("mqtt_topic", "telescope/");
@@ -744,7 +759,8 @@ void setup() {
   if (mqtt_topic.length() == 0) mqtt_topic = "telescope/";
 
   if (mqtt_server.length() > 0) {
-    Serial.printf("[NVS] Restored MQTT Broker: %s:%d (Topic: %s)\n", mqtt_server.c_str(), mqtt_port, mqtt_topic.c_str());
+    Serial.printf("[NVS] Restored Device: '%s', MQTT Broker: %s:%d (Topic: %s%s, LWT: tele/%s/LWT)\n",
+                  device_name.c_str(), mqtt_server.c_str(), mqtt_port, mqtt_topic.c_str(), device_name.c_str(), device_name.c_str());
   }
 
   // Initialize I2C Bus at 100kHz standard speed

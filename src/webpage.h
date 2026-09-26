@@ -861,6 +861,17 @@ const char SETUP_HTML[] PROGMEM = R"rawliteral(
       <div class="section-title">2. MQTT Broker & LWT Settings</div>
       <div class="form-row">
         <div class="form-group">
+          <label for="devName">Device Name (tele/&lt;ID&gt;/LWT)</label>
+          <input type="text" id="devName" name="device_name" value="{{DEVICE_NAME}}" placeholder="pmon" required>
+        </div>
+        <div class="form-group">
+          <label for="mqttTopic">Base Topic</label>
+          <input type="text" id="mqttTopic" name="mqtt_topic" value="{{MQTT_TOPIC}}" placeholder="telescope/">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
           <label for="mqttServer">MQTT Broker Host / IP</label>
           <input type="text" id="mqttServer" name="mqtt_server" value="{{MQTT_SERVER}}" placeholder="e.g. 192.168.0.2">
         </div>
@@ -868,11 +879,6 @@ const char SETUP_HTML[] PROGMEM = R"rawliteral(
           <label for="mqttPort">Port</label>
           <input type="number" id="mqttPort" name="mqtt_port" value="{{MQTT_PORT}}" placeholder="1883">
         </div>
-      </div>
-
-      <div class="form-group">
-        <label for="mqttTopic">Base Topic Prefix</label>
-        <input type="text" id="mqttTopic" name="mqtt_topic" value="{{MQTT_TOPIC}}" placeholder="telescope/">
       </div>
 
       <div class="form-row">
