@@ -56,7 +56,7 @@ An industrial-grade 24VDC power quality, energy accumulator, and enclosure clima
 
 ### Complete System Wiring Schematic
 
-![24V Power & Climate Monitor Wiring Diagram](docs/wiring_diagram.svg)
+![24V Power & Climate Monitor Wiring Diagram](docs/wiring_diagram.png)
 
 ---
 
