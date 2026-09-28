@@ -89,6 +89,15 @@ An industrial-grade 24VDC power quality, energy accumulator, and enclosure clima
 
 ---
 
+## 📸 Finished Build & Installation
+
+| Internal Electronics Assembly | Field Enclosure Deployment |
+| :---: | :---: |
+| ![Internal Electronics Assembly](docs/internal_assembly.jpg) | ![Field Enclosure Deployment](docs/enclosure_mounted.png) |
+| *Custom 3D-printed sub-chassis housing ESP32-S3, INA226 current/voltage monitor, step-down regulator, and external SHT30 sensor lead.* | *Field-deployed weatherproof enclosure with industrial fiber media converter, power distribution blocks, cable glands, and lid-mounted SHT30 climate sensor.* |
+
+---
+
 ## 🚀 Getting Started
 
 ### 1. Build and Flash with PlatformIO
