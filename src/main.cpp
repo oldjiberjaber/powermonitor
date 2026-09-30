@@ -17,7 +17,7 @@
 // ============================================================================
 // CONFIGURATION & PIN DEFINITIONS
 // ============================================================================
-#define FIRMWARE_VERSION "v1.6.0-RTOS"
+#define FIRMWARE_VERSION "v1.7.0-RTOS"
 
 #define I2C_SDA_PIN    8     // Default SDA
 #define I2C_SCL_PIN    9     // Default SCL
@@ -73,9 +73,11 @@ struct Telemetry {
   float session_wh = 0.0f;    // Energy since boot (Wh)
   float session_ah = 0.0f;    // Charge since boot (Ah)
 
-  // Advanced Power Quality & Analytics
-  float v_ripple_mv = 0.0f;         // Peak-to-peak ripple in last 1s (mV)
+  // Advanced Power Quality & Load Analytics
+  float v_ripple_mv = 0.0f;         // Peak-to-peak bus voltage ripple in last 1s (mV)
+  float i_ripple_ma = 0.0f;         // Peak-to-peak current ripple in last 1s (mA)
   float avg_power_1m = 0.0f;        // 1-minute rolling average power (W)
+  float avg_current_1m = 0.0f;      // 1-minute rolling average current (A)
   float projected_kwh_month = 0.0f; // Extrapolated monthly kWh
   float shunt_loss_mw = 0.0f;       // Shunt I^2*R power loss (mW)
 
@@ -204,9 +206,11 @@ void TaskSensors(void *pvParameters) {
   unsigned long lastIntegrationTime = millis();
   unsigned long lastShtRetryTime = 0;
 
-  // Rolling 1-second (50 samples) window for peak-to-peak ripple calculation
+  // Rolling 1-second (50 samples) window for peak-to-peak ripple calculations
   float v_window_max = 0.0f;
   float v_window_min = 999.0f;
+  float i_window_max = 0.0f;
+  float i_window_min = 999.0f;
 
   for (;;) {
     vTaskDelayUntil(&xLastWakeTime, xPeriod);
@@ -232,25 +236,36 @@ void TaskSensors(void *pvParameters) {
       }
     }
 
-    // Ripple tracking across 50 samples
+    // Voltage & Current ripple tracking across 50 samples
     if (v_raw > 1.0f) {
       if (v_raw > v_window_max) v_window_max = v_raw;
       if (v_raw < v_window_min) v_window_min = v_raw;
     }
+    if (i_raw >= 0.0f) {
+      if (i_raw > i_window_max) i_window_max = i_raw;
+      if (i_raw < i_window_min) i_window_min = i_raw;
+    }
 
-    // 2. Read SHT30 every 1 second (50 ticks @ 50Hz)
+    // 2. Read SHT30 and evaluate ripple every 1 second (50 ticks @ 50Hz)
     float temp_raw = telem.temperature;
     float hum_raw = telem.humidity;
     float dew_raw = telem.dew_point;
     bool sht_valid = telem.sht_ok;
 
     if (loopCounter % 50 == 0) {
-      // Calculate peak-to-peak ripple over previous 1s
+      // Calculate peak-to-peak voltage ripple over previous 1s
       if (v_window_max >= v_window_min && v_window_min < 900.0f) {
         telem.v_ripple_mv = (v_window_max - v_window_min) * 1000.0f;
       }
       v_window_max = v_raw;
       v_window_min = (v_raw > 1.0f) ? v_raw : 999.0f;
+
+      // Calculate peak-to-peak current ripple over previous 1s
+      if (i_window_max >= i_window_min && i_window_min < 900.0f) {
+        telem.i_ripple_ma = (i_window_max - i_window_min) * 1000.0f;
+      }
+      i_window_max = i_raw;
+      i_window_min = (i_raw >= 0.0f) ? i_raw : 999.0f;
 
       if (telem.sht_ok) {
         if (sht.read()) {
@@ -286,7 +301,7 @@ void TaskSensors(void *pvParameters) {
         if (telem.voltage > telem.peak_voltage) {
           telem.peak_voltage = telem.voltage;
         }
-        if (telem.voltage < telem.lowest_dip_voltage) {
+        if (telem.lowest_dip_voltage > 900.0f || telem.voltage < telem.lowest_dip_voltage) {
           telem.lowest_dip_voltage = telem.voltage;
         }
 
@@ -330,8 +345,9 @@ void TaskSensors(void *pvParameters) {
           telem.energy_wh += delta_wh;
         }
 
-        // 1-minute rolling average power filter & monthly extrapolation
+        // 1-minute rolling average power & current filters & monthly extrapolation
         telem.avg_power_1m = (telem.avg_power_1m * 0.999f) + (telem.power * 0.001f);
+        telem.avg_current_1m = (telem.avg_current_1m * 0.999f) + (telem.current * 0.001f);
         telem.projected_kwh_month = (telem.avg_power_1m * 24.0f * 30.5f) / 1000.0f;
       }
 
@@ -340,10 +356,10 @@ void TaskSensors(void *pvParameters) {
 
     // 4. Serial Telemetry Summary every 2 seconds (100 ticks)
     if (loopCounter % 100 == 0) {
-      Serial.printf("[RTOS] %5.2fV (Vpp:%3.0fmV | Dip:%5.2fV) | %5.3fA (%5.3fAh) | %5.1fW | Tot:%6.3fkWh | SHT:%4.1fC\n",
+      Serial.printf("[RTOS] %5.2fV (Vpp:%3.0fmV | Dip:%5.2fV) | %5.3fA (Ipp:%3.0fmA | %5.3fAh) | %5.1fW | Tot:%6.3fkWh | SHT:%4.1fC\n",
                     telem.voltage, telem.v_ripple_mv,
                     telem.lowest_dip_voltage < 900 ? telem.lowest_dip_voltage : 0.0f,
-                    telem.current, telem.session_ah,
+                    telem.current, telem.i_ripple_ma, telem.session_ah,
                     telem.power, telem.energy_wh / 1000.0f,
                     telem.temperature);
     }
@@ -383,7 +399,9 @@ void publishMqttTelemetry() {
   doc["session_ah"] = snap.session_ah;
 
   doc["v_ripple_mv"] = snap.v_ripple_mv;
+  doc["i_ripple_ma"] = snap.i_ripple_ma;
   doc["avg_power_1m"] = snap.avg_power_1m;
+  doc["avg_current_1m"] = snap.avg_current_1m;
   doc["projected_kwh_month"] = snap.projected_kwh_month;
   doc["shunt_loss_mw"] = snap.shunt_loss_mw;
 
@@ -477,7 +495,9 @@ void handleApiData() {
   doc["session_ah"] = snap.session_ah;
 
   doc["v_ripple_mv"] = snap.v_ripple_mv;
+  doc["i_ripple_ma"] = snap.i_ripple_ma;
   doc["avg_power_1m"] = snap.avg_power_1m;
+  doc["avg_current_1m"] = snap.avg_current_1m;
   doc["projected_kwh_month"] = snap.projected_kwh_month;
   doc["shunt_loss_mw"] = snap.shunt_loss_mw;
 
@@ -543,9 +563,13 @@ void handleResetStats() {
     telem.last_dip_depth_v = 0.0f;
     telem.peak_current = telem.current;
     telem.peak_power = telem.power;
+    telem.avg_current_1m = telem.current;
+    telem.avg_power_1m = telem.power;
+    telem.i_ripple_ma = 0.0f;
+    telem.v_ripple_mv = 0.0f;
     xSemaphoreGive(telemMutex);
   }
-  server.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Voltage transient stats reset\"}");
+  server.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Transient & current stats reset\"}");
 }
 
 // Wi-Fi & MQTT Setup Handlers

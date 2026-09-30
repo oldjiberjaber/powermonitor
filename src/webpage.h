@@ -218,7 +218,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         </div>
         <div>
           <h1>24VDC Power & Enclosure Monitor</h1>
-          <p>ESP32-S3 Dual-Core RTOS &bull; <span id="hdr-version" style="color:var(--cyan); font-weight:700;">v1.5.0-RTOS</span> (<span id="hdr-build" style="color:var(--text-muted);">--</span>)</p>
+          <p>ESP32-S3 Dual-Core RTOS &bull; <span id="hdr-version" style="color:var(--cyan); font-weight:700;">v1.7.0-RTOS</span> (<span id="hdr-build" style="color:var(--text-muted);">--</span>)</p>
         </div>
       </div>
       <div class="status-bar">
@@ -291,6 +291,10 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           <div class="sub-stat-col">
             <span style="color:var(--text-muted); font-size:0.7rem;">SESSION Ah</span>
             <span id="val-session-ah" style="color:#34d399;">0.000 Ah</span>
+          </div>
+          <div class="sub-stat-col" style="text-align:center;">
+            <span style="color:var(--text-muted); font-size:0.7rem;">RIPPLE (Ipp)</span>
+            <span id="val-i-ripple" style="color:#a78bfa;">-- mA</span>
           </div>
           <div class="sub-stat-col" style="text-align:right;">
             <span style="color:var(--text-muted); font-size:0.7rem;">PEAK CURRENT</span>
@@ -413,9 +417,25 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         </div>
       </div>
 
-      <!-- Energy Analytics & Enclosure Safety -->
+      <!-- Current Dynamics & Energy Analytics -->
       <div class="pq-card">
-        <div class="pq-title">Energy Analytics & Enclosure Safety</div>
+        <div class="pq-title">Current Dynamics & Energy Analytics</div>
+        <div class="pq-stat-row">
+          <span class="pq-stat-label">1-Minute Average Current:</span>
+          <span class="pq-stat-val" id="pq-avg-current" style="color:#34d399;">-- A</span>
+        </div>
+        <div class="pq-stat-row">
+          <span class="pq-stat-label">Current Ripple (I<sub>pp</sub>):</span>
+          <span class="pq-stat-val" id="pq-i-ripple" style="color:#a78bfa;">-- mA</span>
+        </div>
+        <div class="pq-stat-row">
+          <span class="pq-stat-label">Shunt Drop (V<sub>shunt</sub>):</span>
+          <span class="pq-stat-val" id="pq-shunt-mv">-- mV</span>
+        </div>
+        <div class="pq-stat-row">
+          <span class="pq-stat-label">Shunt Heat Loss (I&sup2;R):</span>
+          <span class="pq-stat-val" id="pq-shunt-loss">-- mW</span>
+        </div>
         <div class="pq-stat-row">
           <span class="pq-stat-label">1-Minute Average Power:</span>
           <span class="pq-stat-val" id="pq-avg-power">-- W</span>
@@ -424,10 +444,11 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           <span class="pq-stat-label">Projected Monthly Consumption:</span>
           <span class="pq-stat-val" id="pq-proj-month" style="color:#fbbf24;">-- kWh</span>
         </div>
-        <div class="pq-stat-row">
-          <span class="pq-stat-label">Shunt Heat Loss (I&sup2;R):</span>
-          <span class="pq-stat-val" id="pq-shunt-loss">-- mW</span>
-        </div>
+      </div>
+
+      <!-- Enclosure Climate & Safety -->
+      <div class="pq-card">
+        <div class="pq-title">Enclosure Climate & Safety</div>
         <div class="pq-stat-row">
           <span class="pq-stat-label">Dew Point:</span>
           <span class="pq-stat-val" id="val-dewpoint">-- &deg;C</span>
@@ -448,7 +469,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       <div>
         <span>SSID: <b id="lbl-ssid" style="color:var(--text-main)">--</b></span> &bull; 
         <span>IP: <b id="lbl-ip" style="color:var(--text-main)">192.168.0.191</b></span> &bull; 
-        <span>FW: <b id="lbl-version" style="color:var(--cyan)">v1.5.0-RTOS</b></span> &bull; 
+        <span>FW: <b id="lbl-version" style="color:var(--cyan)">v1.7.0-RTOS</b></span> &bull; 
         <span>Built: <span id="lbl-build" style="color:var(--text-main)">--</span></span> &bull; 
         <span>Free Heap: <span id="lbl-heap">-- KB</span></span>
       </div>
@@ -562,13 +583,26 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         if (data.dip_count !== undefined) document.getElementById('pq-dip-count').innerText = data.dip_count;
         if (data.surge_count !== undefined) document.getElementById('pq-surge-count').innerText = data.surge_count;
 
-        // 2. Current & Session Ah
+        // 2. Current, Ripple, 1-Min Avg & Session Ah
         if (data.current !== undefined) {
           document.getElementById('val-current').innerText = Number(data.current).toFixed(3);
           document.getElementById('bar-current').style.width = Math.min(100, Math.max(0, (Number(data.current) / 8.0) * 100)) + '%';
         }
         if (data.peak_current !== undefined) {
           document.getElementById('peak-current').innerText = Number(data.peak_current).toFixed(2) + ' A';
+        }
+        if (data.i_ripple_ma !== undefined) {
+          document.getElementById('val-i-ripple').innerText = Number(data.i_ripple_ma).toFixed(0) + ' mA';
+          const pqIRipple = document.getElementById('pq-i-ripple');
+          if (pqIRipple) pqIRipple.innerText = Number(data.i_ripple_ma).toFixed(1) + ' mA';
+        }
+        if (data.avg_current_1m !== undefined) {
+          const pqAvgCur = document.getElementById('pq-avg-current');
+          if (pqAvgCur) pqAvgCur.innerText = Number(data.avg_current_1m).toFixed(3) + ' A';
+        }
+        if (data.shunt_mv !== undefined) {
+          const pqShuntMv = document.getElementById('pq-shunt-mv');
+          if (pqShuntMv) pqShuntMv.innerText = Number(data.shunt_mv).toFixed(2) + ' mV';
         }
         if (data.session_ah !== undefined) {
           document.getElementById('val-session-ah').innerText = Number(data.session_ah).toFixed(3) + ' Ah';

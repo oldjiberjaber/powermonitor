@@ -14,12 +14,17 @@ An industrial-grade 24VDC power quality, energy accumulator, and enclosure clima
 - **Dual-Core FreeRTOS Architecture**:
   - **Core 1 (Priority 3 - 50 Hz)**: Real-time ADC sampling, high-frequency voltage transient/dip capture, Coulomb counter integration (Ah, Wh).
   - **Core 0 (Priority 1)**: Asynchronous Web Server, REST API, DNS Captive Portal, mDNS, and OTA updates.
-- **Power Quality & Transient Analytics**:
+- **Power Quality & Voltage Transient Analytics**:
   - Peak-to-peak bus voltage ripple (Vpp in mV).
   - High-speed transient dip detection (< 22.5V with 0.3V hysteresis) and lowest dip capture.
   - Surge event tracking (> 26.5V).
   - Real-time headroom indicator to industrial 21.6V undervoltage cutoff (PLC standard).
-  - Shunt resistor I²R power loss tracking.
+- **Current Dynamics & Shunt Analytics**:
+  - Precision 16-bit current sensing with 0.25 mA resolution across a 10 mΩ (`R010`) high-side shunt.
+  - Peak-to-peak load current ripple (Ipp in mA) over rolling 1-second windows.
+  - 1-minute rolling average filtered load current (A).
+  - Real-time shunt drop (mV) and I²R thermal dissipation tracking (mW).
+  - Hardware peak current ($I_{\text{peak}}$) capture.
   - 1-minute rolling average power filter & extrapolated monthly consumption (kWh).
 - **Energy Accumulation with Non-Volatile Persistence (NVS)**:
   - Total Lifetime Energy (kWh) stored across reboots in ESP32 NVS flash.
@@ -151,7 +156,9 @@ pio run -e esp32-s3-devkitc-1 -t upload
   "session_wh": 1.25,
   "session_ah": 0.052,
   "v_ripple_mv": 12.5,
+  "i_ripple_ma": 4.2,
   "avg_power_1m": 2.02,
+  "avg_current_1m": 0.084,
   "projected_kwh_month": 1.48,
   "shunt_loss_mw": 0.072,
   "temperature": 24.8,
@@ -191,7 +198,9 @@ Returns electrical telemetry, transient statistics, enclosure climate, and MQTT 
   "session_wh": 1.25,
   "session_ah": 0.052,
   "v_ripple_mv": 12.5,
+  "i_ripple_ma": 4.2,
   "avg_power_1m": 2.02,
+  "avg_current_1m": 0.084,
   "projected_kwh_month": 1.48,
   "shunt_loss_mw": 0.072,
   "temperature": 24.8,
@@ -213,9 +222,9 @@ Returns electrical telemetry, transient statistics, enclosure climate, and MQTT 
   "mqtt_connected": true,
   "mqtt_server": "192.168.0.2",
   "mqtt_topic": "telescope/",
-  "version": "v1.6.0-RTOS",
-  "build_date": "Sep 27 2026",
-  "build_time": "00:38:00",
+  "version": "v1.7.0-RTOS",
+  "build_date": "Sep 30 2026",
+  "build_time": "20:13:00",
   "free_heap": 241160,
   "i2c_devices": [64, 69]
 }
