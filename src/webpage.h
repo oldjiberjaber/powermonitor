@@ -218,7 +218,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         </div>
         <div>
           <h1>24VDC Power & Enclosure Monitor</h1>
-          <p>ESP32-S3 Dual-Core RTOS &bull; <span id="hdr-version" style="color:var(--cyan); font-weight:700;">v1.7.0-RTOS</span> (<span id="hdr-build" style="color:var(--text-muted);">--</span>)</p>
+          <p>ESP32-S3 Dual-Core RTOS &bull; <span id="hdr-version" style="color:var(--cyan); font-weight:700;">v1.8.0-RTOS</span> (<span id="hdr-build" style="color:var(--text-muted);">--</span>)</p>
         </div>
       </div>
       <div class="status-bar">
@@ -307,8 +307,11 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       <div class="card">
         <div class="card-header">
           <span class="card-title">Power & Energy to Date</span>
-          <div class="card-icon" style="background: rgba(245, 158, 11, 0.15); color: var(--amber);">
-            <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
+          <div style="display:flex; align-items:center; gap:0.4rem;">
+            <button class="btn btn-sm" onclick="resetPeakPower(event)" title="Reset Peak Power" style="padding:0.2rem 0.5rem; font-size:0.7rem; line-height:1;">Reset Peak</button>
+            <div class="card-icon" style="background: rgba(245, 158, 11, 0.15); color: var(--amber);">
+              <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
+            </div>
           </div>
         </div>
         <div class="val-container">
@@ -323,9 +326,13 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             <span style="color:var(--text-muted); font-size:0.7rem;">TOTAL TO DATE</span>
             <span id="val-total-kwh" style="color:#fbbf24;">0.000 kWh</span>
           </div>
-          <div class="sub-stat-col" style="text-align:right;">
+          <div class="sub-stat-col" style="text-align:center;">
             <span style="color:var(--text-muted); font-size:0.7rem;">SESSION Wh</span>
             <span id="val-session-wh" style="color:#fde68a;">0.0 Wh</span>
+          </div>
+          <div class="sub-stat-col" style="text-align:right;">
+            <span style="color:var(--text-muted); font-size:0.7rem;">PEAK POWER</span>
+            <span id="val-peak-power" style="color:#fb923c;">--.- W</span>
           </div>
         </div>
       </div>
@@ -441,6 +448,10 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           <span class="pq-stat-val" id="pq-avg-power">-- W</span>
         </div>
         <div class="pq-stat-row">
+          <span class="pq-stat-label">Peak Power Since Boot:</span>
+          <span class="pq-stat-val" id="pq-peak-power" style="color:#fb923c;">-- W</span>
+        </div>
+        <div class="pq-stat-row">
           <span class="pq-stat-label">Projected Monthly Consumption:</span>
           <span class="pq-stat-val" id="pq-proj-month" style="color:#fbbf24;">-- kWh</span>
         </div>
@@ -469,7 +480,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       <div>
         <span>SSID: <b id="lbl-ssid" style="color:var(--text-main)">--</b></span> &bull; 
         <span>IP: <b id="lbl-ip" style="color:var(--text-main)">192.168.0.191</b></span> &bull; 
-        <span>FW: <b id="lbl-version" style="color:var(--cyan)">v1.7.0-RTOS</b></span> &bull; 
+        <span>FW: <b id="lbl-version" style="color:var(--cyan)">v1.8.0-RTOS</b></span> &bull; 
         <span>Built: <span id="lbl-build" style="color:var(--text-main)">--</span></span> &bull; 
         <span>Free Heap: <span id="lbl-heap">-- KB</span></span>
       </div>
@@ -621,6 +632,13 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         if (data.session_wh !== undefined) {
           document.getElementById('val-session-wh').innerText = Number(data.session_wh).toFixed(1) + ' Wh';
         }
+        if (data.peak_power !== undefined) {
+          const pkPwr = Number(data.peak_power).toFixed(1) + ' W';
+          const pkPwrEl = document.getElementById('val-peak-power');
+          if (pkPwrEl) pkPwrEl.innerText = pkPwr;
+          const pqPkPwrEl = document.getElementById('pq-peak-power');
+          if (pqPkPwrEl) pqPkPwrEl.innerText = pkPwr;
+        }
         if (data.avg_power_1m !== undefined) {
           document.getElementById('pq-avg-power').innerText = Number(data.avg_power_1m).toFixed(1) + ' W';
         }
@@ -763,6 +781,14 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     async function resetVoltageStats() {
       if (confirm('Reset voltage min/max and transient dip counters?')) {
         await fetch('/api/reset-stats', { method: 'POST' });
+        fetchData();
+      }
+    }
+
+    async function resetPeakPower(e) {
+      if (e) e.stopPropagation();
+      if (confirm('Reset peak power record to current load?')) {
+        await fetch('/api/reset-peak-power', { method: 'POST' });
         fetchData();
       }
     }

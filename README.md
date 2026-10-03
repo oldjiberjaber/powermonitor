@@ -222,9 +222,9 @@ Returns electrical telemetry, transient statistics, enclosure climate, and MQTT 
   "mqtt_connected": true,
   "mqtt_server": "192.168.0.2",
   "mqtt_topic": "telescope/",
-  "version": "v1.7.0-RTOS",
-  "build_date": "Sep 30 2026",
-  "build_time": "20:13:00",
+  "version": "v1.8.0-RTOS",
+  "build_date": "Oct 03 2026",
+  "build_time": "23:00:00",
   "free_heap": 241160,
   "i2c_devices": [64, 69]
 }
@@ -234,7 +234,10 @@ Returns electrical telemetry, transient statistics, enclosure climate, and MQTT 
 Resets the non-volatile cumulative energy accumulator and session counters.
 
 ### `POST /api/reset-stats`
-Resets the transient peak/dip min/max voltage records and dip event counters.
+Resets the transient peak/dip min/max voltage records, current peaks, and dip event counters.
+
+### `POST /api/reset-peak-power`
+Resets the recorded peak power watermark to the current instantaneous load power.
 
 ---
 

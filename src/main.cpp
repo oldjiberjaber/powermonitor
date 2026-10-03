@@ -17,7 +17,7 @@
 // ============================================================================
 // CONFIGURATION & PIN DEFINITIONS
 // ============================================================================
-#define FIRMWARE_VERSION "v1.7.0-RTOS"
+#define FIRMWARE_VERSION "v1.8.0-RTOS"
 
 #define I2C_SDA_PIN    8     // Default SDA
 #define I2C_SCL_PIN    9     // Default SCL
@@ -572,6 +572,14 @@ void handleResetStats() {
   server.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Transient & current stats reset\"}");
 }
 
+void handleResetPeakPower() {
+  if (xSemaphoreTake(telemMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+    telem.peak_power = telem.power;
+    xSemaphoreGive(telemMutex);
+  }
+  server.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Peak power reset\"}");
+}
+
 // Wi-Fi & MQTT Setup Handlers
 void handleSetup() {
   int n = WiFi.scanNetworks();
@@ -869,6 +877,7 @@ void setup() {
   server.on("/api/data", HTTP_GET, handleApiData);
   server.on("/api/reset-energy", HTTP_POST, handleResetEnergy);
   server.on("/api/reset-stats", HTTP_POST, handleResetStats);
+  server.on("/api/reset-peak-power", HTTP_POST, handleResetPeakPower);
   server.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
 
   // Captive Portal Detection Endpoints
