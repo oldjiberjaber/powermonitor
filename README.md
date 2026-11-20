@@ -33,6 +33,11 @@ An industrial-grade 24VDC power quality, energy accumulator, and enclosure clima
   - Accurate Temperature & Relative Humidity.
   - Real-time Dew Point calculation using the Magnus formula.
   - **Condensation Margin (ΔT = Tenclosure - Tdew_point)** alerting against moisture risk on terminals/PCBs.
+- **Resilient Wi-Fi Auto-Reconnect & Connection Drop Watchdog**:
+  - Continuous network watchdog monitors Wi-Fi connection health in real time.
+  - Automatically re-initiates connection every 5 seconds upon signal loss or router reboot.
+  - Tracks Wi-Fi disconnect/drop events since boot (`wifi_drops`).
+  - Graceful fallback SoftAP does not block STA background retries.
 - **Zero-Config Fallback Captive Portal**:
   - If Wi-Fi is unconfigured or out of range, the device broadcasts `PowerMonitor-Setup`.
   - Embedded DNS server automatically launches the Wi-Fi setup captive portal (`192.168.4.1/setup`) on iOS, Android, and Windows.
@@ -174,6 +179,7 @@ pio run -e esp32-s3-devkitc-1 -t upload
   "peak_power": 13.0,
   "uptime_sec": 3600,
   "wifi_rssi": -62,
+  "wifi_drops": 0,
   "free_heap": 241160
 }
 ```
@@ -219,12 +225,13 @@ Returns electrical telemetry, transient statistics, enclosure climate, and MQTT 
   "uptime_str": "1d 4h 12m",
   "ssid": "MyWiFiNetwork",
   "wifi_rssi": -62,
+  "wifi_drops": 0,
   "mqtt_connected": true,
   "mqtt_server": "192.168.0.2",
   "mqtt_topic": "telescope/",
-  "version": "v1.8.0-RTOS",
-  "build_date": "Oct 03 2026",
-  "build_time": "23:00:00",
+  "version": "v1.9.1-RTOS",
+  "build_date": "Nov 20 2026",
+  "build_time": "16:50:00",
   "free_heap": 241160,
   "i2c_devices": [64, 69]
 }
@@ -238,6 +245,9 @@ Resets the transient peak/dip min/max voltage records, current peaks, and dip ev
 
 ### `POST /api/reset-peak-power`
 Resets the recorded peak power watermark to the current instantaneous load power.
+
+### `POST /api/reboot`
+Safely commits cumulative energy counters to NVS flash and restarts the ESP32-S3 microcontroller.
 
 ---
 

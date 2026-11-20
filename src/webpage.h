@@ -206,6 +206,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     .btn:hover { background: rgba(255,255,255,0.15); }
     .btn-sm { padding: 0.25rem 0.6rem; font-size: 0.75rem; }
     .btn-primary { background: linear-gradient(135deg, #0284c7, #2563eb); border: none; color: #fff; }
+    .btn-danger { color: #fca5a5; border-color: rgba(239, 68, 68, 0.3); }
     .btn-danger:hover { background: rgba(239, 68, 68, 0.3); border-color: var(--red); color: #fff; }
   </style>
 </head>
@@ -218,7 +219,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         </div>
         <div>
           <h1>24VDC Power & Enclosure Monitor</h1>
-          <p>ESP32-S3 Dual-Core RTOS &bull; <span id="hdr-version" style="color:var(--cyan); font-weight:700;">v1.8.0-RTOS</span> (<span id="hdr-build" style="color:var(--text-muted);">--</span>)</p>
+          <p>ESP32-S3 Dual-Core RTOS &bull; <span id="hdr-version" style="color:var(--cyan); font-weight:700;">v1.9.1-RTOS</span> (<span id="hdr-build" style="color:var(--text-muted);">--</span>)</p>
         </div>
       </div>
       <div class="status-bar">
@@ -469,6 +470,10 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           <span class="pq-stat-val" id="pq-cond-margin" style="color:#34d399;">-- &deg;C (Safe)</span>
         </div>
         <div class="pq-stat-row">
+          <span class="pq-stat-label">Wi-Fi Disconnect Events:</span>
+          <span class="pq-stat-val" id="pq-wifi-drops">0</span>
+        </div>
+        <div class="pq-stat-row">
           <span class="pq-stat-label">I²C Bus Devices:</span>
           <span class="pq-stat-val" id="i2c-tags-list">Scanning...</span>
         </div>
@@ -479,14 +484,16 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     <div class="bottom-bar">
       <div>
         <span>SSID: <b id="lbl-ssid" style="color:var(--text-main)">--</b></span> &bull; 
-        <span>IP: <b id="lbl-ip" style="color:var(--text-main)">192.168.0.191</b></span> &bull; 
-        <span>FW: <b id="lbl-version" style="color:var(--cyan)">v1.8.0-RTOS</b></span> &bull; 
+        <span>Drops: <b id="lbl-wifi-drops" style="color:var(--text-main)">0</b></span> &bull; 
+        <span>IP: <b id="lbl-ip" style="color:var(--text-main)">--</b></span> &bull; 
+        <span>FW: <b id="lbl-version" style="color:var(--cyan)">v1.9.1-RTOS</b></span> &bull; 
         <span>Built: <span id="lbl-build" style="color:var(--text-main)">--</span></span> &bull; 
         <span>Free Heap: <span id="lbl-heap">-- KB</span></span>
       </div>
-      <div style="display:flex; gap:0.5rem;">
+      <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
         <a class="btn" href="/setup">Configure Wi-Fi</a>
         <button class="btn btn-danger" onclick="resetEnergy()">Reset Cumulative Energy</button>
+        <button class="btn btn-danger" onclick="rebootDevice()">Reboot</button>
         <button class="btn" onclick="fetchData()">Refresh Now</button>
       </div>
     </div>
@@ -708,7 +715,8 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         if (data.ssid && data.wifi_rssi !== undefined) {
           const rssi = Number(data.wifi_rssi);
           let signalQuality = Math.min(100, Math.max(0, Math.round(2 * (rssi + 100))));
-          document.getElementById('lbl-wifi').innerText = data.ssid + ' (' + rssi + ' dBm, ' + signalQuality + '%)';
+          let dropNote = (data.wifi_drops !== undefined && data.wifi_drops > 0) ? ` [${data.wifi_drops} drop${data.wifi_drops > 1 ? 's' : ''}]` : '';
+          document.getElementById('lbl-wifi').innerText = data.ssid + ' (' + rssi + ' dBm, ' + signalQuality + '%)' + dropNote;
           document.getElementById('lbl-ssid').innerText = data.ssid;
           if (rssi > -65) {
             document.getElementById('dot-wifi').className = 'dot';
@@ -716,6 +724,18 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             document.getElementById('dot-wifi').className = 'dot warn';
           } else {
             document.getElementById('dot-wifi').className = 'dot err';
+          }
+        }
+        if (data.wifi_drops !== undefined) {
+          const dropsEl = document.getElementById('lbl-wifi-drops');
+          if (dropsEl) {
+            dropsEl.innerText = data.wifi_drops;
+            dropsEl.style.color = data.wifi_drops > 0 ? '#f59e0b' : 'var(--text-main)';
+          }
+          const pqDropsEl = document.getElementById('pq-wifi-drops');
+          if (pqDropsEl) {
+            pqDropsEl.innerText = data.wifi_drops;
+            pqDropsEl.style.color = data.wifi_drops > 0 ? '#f59e0b' : 'var(--text-main)';
           }
         }
 
@@ -790,6 +810,16 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       if (confirm('Reset peak power record to current load?')) {
         await fetch('/api/reset-peak-power', { method: 'POST' });
         fetchData();
+      }
+    }
+
+    async function rebootDevice() {
+      if (confirm('Are you sure you want to reboot the Power Monitor?')) {
+        try {
+          await fetch('/api/reboot', { method: 'POST' });
+        } catch (e) {}
+        alert('Device is rebooting now. The page will reload in 10 seconds.');
+        setTimeout(() => { window.location.reload(); }, 10000);
       }
     }
 

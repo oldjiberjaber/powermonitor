@@ -17,7 +17,7 @@
 // ============================================================================
 // CONFIGURATION & PIN DEFINITIONS
 // ============================================================================
-#define FIRMWARE_VERSION "v1.8.0-RTOS"
+#define FIRMWARE_VERSION "v1.9.1-RTOS"
 
 #define I2C_SDA_PIN    8     // Default SDA
 #define I2C_SCL_PIN    9     // Default SCL
@@ -99,6 +99,8 @@ struct Telemetry {
   float peak_current = 0.0f;
   float peak_power = 0.0f;
   float max_temp = -99.0f;
+
+  uint32_t wifi_disconnect_count = 0; // Number of Wi-Fi connection loss events
 
   bool ina_ok = false;
   bool sht_ok = false;
@@ -422,6 +424,7 @@ void publishMqttTelemetry() {
 
   doc["uptime_sec"] = millis() / 1000;
   doc["wifi_rssi"] = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
+  doc["wifi_drops"] = snap.wifi_disconnect_count;
   doc["free_heap"] = ESP.getFreeHeap();
 
   String jsonPayload;
@@ -524,6 +527,7 @@ void handleApiData() {
   doc["ip"] = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
   doc["ssid"] = WiFi.status() == WL_CONNECTED ? WiFi.SSID() : String(AP_SSID);
   doc["wifi_rssi"] = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
+  doc["wifi_drops"] = snap.wifi_disconnect_count;
   doc["mqtt_connected"] = mqttClient.connected();
   doc["mqtt_server"] = mqtt_server;
   doc["mqtt_topic"] = getMqttBaseTopic() + device_name;
@@ -567,6 +571,7 @@ void handleResetStats() {
     telem.avg_power_1m = telem.power;
     telem.i_ripple_ma = 0.0f;
     telem.v_ripple_mv = 0.0f;
+    telem.wifi_disconnect_count = 0;
     xSemaphoreGive(telemMutex);
   }
   server.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Transient & current stats reset\"}");
@@ -578,6 +583,19 @@ void handleResetPeakPower() {
     xSemaphoreGive(telemMutex);
   }
   server.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Peak power reset\"}");
+}
+
+void handleReboot() {
+  server.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Rebooting device...\"}");
+  delay(200);
+  // Persist accumulated energy to NVS before rebooting
+  if (xSemaphoreTake(telemMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+    prefs.putFloat("energy_wh", telem.energy_wh);
+    xSemaphoreGive(telemMutex);
+  }
+  WiFi.disconnect(true);
+  delay(500);
+  ESP.restart();
 }
 
 // Wi-Fi & MQTT Setup Handlers
@@ -663,6 +681,8 @@ void handleSaveWifi() {
 
   server.send(200, "text/html", resp);
   delay(1500);
+  WiFi.disconnect(true);
+  delay(500);
   ESP.restart();
 }
 
@@ -715,6 +735,8 @@ void handleUpdateUpload() {
 // ============================================================================
 void TaskWeb(void *pvParameters) {
   unsigned long lastNvsSave = millis();
+  unsigned long lastWifiRetry = 0;
+  bool wasConnected = (WiFi.status() == WL_CONNECTED);
 
   for (;;) {
     if (isApMode) {
@@ -722,7 +744,28 @@ void TaskWeb(void *pvParameters) {
     }
     server.handleClient();
 
-    if (!isApMode && WiFi.status() == WL_CONNECTED) {
+    wl_status_t wifiStatus = WiFi.status();
+
+    if (wifiStatus == WL_CONNECTED) {
+      if (!wasConnected) {
+        wasConnected = true;
+        isApMode = false;
+        Serial.printf("[WiFi] Connected! IP: %s, RSSI: %d dBm (Disconnect events: %u)\n",
+                      WiFi.localIP().toString().c_str(), WiFi.RSSI(), telem.wifi_disconnect_count);
+
+        // Stop fallback SoftAP once main Wi-Fi is connected
+        if (WiFi.getMode() & WIFI_AP) {
+          dnsServer.stop();
+          WiFi.softAPdisconnect(true);
+          WiFi.mode(WIFI_STA);
+        }
+
+        // Re-announce mDNS & ensure OTA are ready
+        MDNS.end();
+        MDNS.begin("powermonitor");
+        ArduinoOTA.begin();
+      }
+
       ArduinoOTA.handle();
 
       // MQTT Management
@@ -740,6 +783,29 @@ void TaskWeb(void *pvParameters) {
             lastMqttPublishTime = now;
             publishMqttTelemetry();
           }
+        }
+      }
+    } else {
+      // Disconnected state
+      if (wasConnected) {
+        wasConnected = false;
+        if (xSemaphoreTake(telemMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+          telem.wifi_disconnect_count++;
+          xSemaphoreGive(telemMutex);
+        }
+        Serial.printf("[WiFi] Connection LOST! (Total Drops: %u). Retrying every 5s...\n",
+                      telem.wifi_disconnect_count);
+      }
+
+      // If credentials exist, actively retry connection regularly
+      if (wifi_ssid_str.length() > 0) {
+        unsigned long now = millis();
+        if (now - lastWifiRetry >= 5000) {
+          lastWifiRetry = now;
+          Serial.printf("[WiFi] Retrying connection to '%s' (Drops: %u)...\n",
+                        wifi_ssid_str.c_str(), telem.wifi_disconnect_count);
+          WiFi.disconnect();
+          WiFi.begin(wifi_ssid_str.c_str(), wifi_pass_str.c_str());
         }
       }
     }
@@ -817,13 +883,17 @@ void setup() {
   }
 
   // Connect to WiFi
-  WiFi.mode(WIFI_AP_STA);
+  WiFi.persistent(false);
+  WiFi.setAutoReconnect(true);
+  WiFi.setSleep(false); // Disable modem sleep to prevent connection drops/missed beacons
+
   if (wifi_ssid_str.length() > 0) {
-    Serial.printf("[WiFi] Attempting connection to '%s'...\n", wifi_ssid_str.c_str());
+    WiFi.mode(WIFI_STA);
+    Serial.printf("[WiFi] Attempting connection to '%s' (timeout 15s)...\n", wifi_ssid_str.c_str());
     WiFi.begin(wifi_ssid_str.c_str(), wifi_pass_str.c_str());
 
     unsigned long startAttemptTime = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 8000) {
+    while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 15000) {
       delay(250);
       Serial.print(".");
     }
@@ -835,8 +905,11 @@ void setup() {
     Serial.print("[WiFi] IP Address: ");
     Serial.println(WiFi.localIP());
   } else {
-    isApMode = true;
-    Serial.println("\n[WiFi] Connection failed or not configured. Launching Fallback Captive Portal...");
+    // If not connected yet: start SoftAP as fallback so user can reach setup if credentials changed,
+    // but keep STA active so background watchdog in TaskWeb will continue retrying every 5 seconds!
+    WiFi.mode(WIFI_AP_STA);
+    isApMode = (wifi_ssid_str.length() == 0);
+    Serial.println("\n[WiFi] Initial connection pending. Launching SoftAP and background retry watchdog...");
     IPAddress apIP(192, 168, 4, 1);
     WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
     WiFi.softAP(AP_SSID, ""); // Open SoftAP for easy captive configuration
@@ -878,6 +951,8 @@ void setup() {
   server.on("/api/reset-energy", HTTP_POST, handleResetEnergy);
   server.on("/api/reset-stats", HTTP_POST, handleResetStats);
   server.on("/api/reset-peak-power", HTTP_POST, handleResetPeakPower);
+  server.on("/api/reboot", HTTP_POST, handleReboot);
+  server.on("/api/reboot", HTTP_GET, handleReboot);
   server.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
 
   // Captive Portal Detection Endpoints
