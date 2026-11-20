@@ -7,5 +7,6 @@
 *.elf
 *.hex
 *.log
+*.code-workspace
 .DS_Store
 Thumbs.db

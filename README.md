@@ -122,15 +122,18 @@ cd powermonitor
 pio run -e esp32-s3-devkitc-1 -t upload
 ```
 
-### 2. Wi-Fi & MQTT Configuration (Captive Portal)
-1. On initial power-up (or when Wi-Fi is unconfigured), the device broadcasts:
-   ```
-   PowerMonitor-Setup
-   ```
-2. Connect your phone or laptop to `PowerMonitor-Setup`.
-3. The setup page opens automatically (or navigate to `http://192.168.4.1/setup`).
-4. Select your 2.4GHz Wi-Fi network, enter credentials, configure your MQTT Broker Host/IP (e.g. `192.168.0.2`), and click **Save Configuration & Connect**.
-5. The device saves all settings to NVS and reboots into normal operating mode.
+### 2. Wi-Fi & MQTT Configuration
+1. **Initial Provisioning (Captive Portal):**
+   - On initial power-up (or when Wi-Fi is unconfigured), the device broadcasts:
+     ```
+     PowerMonitor-Setup
+     ```
+   - Connect your phone or laptop to `PowerMonitor-Setup` and navigate to `http://192.168.4.1/setup`.
+   - Select your 2.4GHz Wi-Fi network, enter credentials, and click **Save Wi-Fi & Reconnect**.
+2. **Dedicated Settings Pages:**
+   - **Wi-Fi Settings (`/setup`):** Scan, select, and configure Wi-Fi SSID and password.
+   - **MQTT & LWT Settings (`/mqtt`):** Configure Device Name (LWT identifier), base topic, broker host/IP, port, username, and password independently without rebooting the microcontroller.
+   - Direct links to both configuration pages are available in the dashboard bottom bar.
 
 ### 3. Accessing the Dashboard
 - **mDNS Hostname:** `http://powermonitor.local`
@@ -229,7 +232,7 @@ Returns electrical telemetry, transient statistics, enclosure climate, and MQTT 
   "mqtt_connected": true,
   "mqtt_server": "192.168.0.2",
   "mqtt_topic": "telescope/",
-  "version": "v1.9.1-RTOS",
+  "version": "v1.9.2-RTOS",
   "build_date": "Nov 20 2026",
   "build_time": "16:50:00",
   "free_heap": 241160,

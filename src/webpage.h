@@ -486,12 +486,13 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         <span>SSID: <b id="lbl-ssid" style="color:var(--text-main)">--</b></span> &bull; 
         <span>Drops: <b id="lbl-wifi-drops" style="color:var(--text-main)">0</b></span> &bull; 
         <span>IP: <b id="lbl-ip" style="color:var(--text-main)">--</b></span> &bull; 
-        <span>FW: <b id="lbl-version" style="color:var(--cyan)">v1.9.1-RTOS</b></span> &bull; 
+        <span>FW: <b id="lbl-version" style="color:var(--cyan)">v1.9.2-RTOS</b></span> &bull; 
         <span>Built: <span id="lbl-build" style="color:var(--text-main)">--</span></span> &bull; 
         <span>Free Heap: <span id="lbl-heap">-- KB</span></span>
       </div>
       <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
         <a class="btn" href="/setup">Configure Wi-Fi</a>
+        <a class="btn" href="/mqtt">Configure MQTT</a>
         <button class="btn btn-danger" onclick="resetEnergy()">Reset Cumulative Energy</button>
         <button class="btn btn-danger" onclick="rebootDevice()">Reboot</button>
         <button class="btn" onclick="fetchData()">Refresh Now</button>
@@ -848,7 +849,7 @@ const char SETUP_HTML[] PROGMEM = R"rawliteral(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Setup | 24V Power Monitor</title>
+  <title>Wi-Fi Setup | 24V Power Monitor</title>
   <style>
     :root {
       --bg-base: #0b0f19;
@@ -881,9 +882,7 @@ const char SETUP_HTML[] PROGMEM = R"rawliteral(
     .header { text-align: center; margin-bottom: 1.5rem; }
     .header h1 { font-size: 1.35rem; font-weight: 700; margin-bottom: 0.35rem; }
     .header p { font-size: 0.85rem; color: var(--text-muted); }
-    .section-title { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--cyan); margin: 1.5rem 0 0.75rem; border-bottom: 1px solid var(--border-card); padding-bottom: 0.35rem; display: flex; align-items: center; gap: 0.5rem; }
     .form-group { margin-bottom: 1rem; }
-    .form-row { display: grid; grid-template-columns: 2fr 1fr; gap: 0.75rem; }
     label { display: block; font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.4rem; }
     input, select {
       width: 100%;
@@ -914,8 +913,9 @@ const char SETUP_HTML[] PROGMEM = R"rawliteral(
     }
     .btn-submit:hover { opacity: 0.9; }
     .status-msg { margin-top: 1rem; text-align: center; font-size: 0.85rem; color: var(--cyan); display: none; }
-    .nav-link { display: block; text-align: center; margin-top: 1rem; font-size: 0.8rem; color: var(--text-muted); text-decoration: none; }
+    .nav-link { display: block; text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted); text-decoration: none; }
     .nav-link:hover { color: #fff; }
+    .nav-highlight { color: var(--cyan); font-weight: 600; }
   </style>
 </head>
 <body>
@@ -924,12 +924,11 @@ const char SETUP_HTML[] PROGMEM = R"rawliteral(
       <div style="width:48px;height:48px;background:linear-gradient(135deg, #00d4ff, #3b82f6);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;box-shadow:0 0 20px rgba(0,212,255,0.4);">
         <svg style="width:24px;height:24px;fill:#fff;" viewBox="0 0 24 24"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98A16.88 16.88 0 0 0 12 4zm0 3.8c3.48 0 6.64 1.35 9.02 3.56L12 18.59 2.98 11.36A12.02 12.02 0 0 1 12 7.8z"/></svg>
       </div>
-      <h1>System Configuration</h1>
-      <p>Wi-Fi Network & MQTT Telemetry Settings</p>
+      <h1>Wi-Fi Configuration</h1>
+      <p>Connect Power Monitor to your 2.4GHz network</p>
     </div>
 
     <form method="POST" action="/save-wifi" id="setupForm">
-      <div class="section-title">1. Wi-Fi Connection</div>
       <div class="form-group">
         <label for="ssidSelect">Select Detected 2.4GHz Network</label>
         <select id="ssidSelect" onchange="onSelectSSID(this.value)">
@@ -940,7 +939,7 @@ const char SETUP_HTML[] PROGMEM = R"rawliteral(
 
       <div class="form-group">
         <label for="ssid">Or Enter SSID Manually</label>
-        <input type="text" id="ssid" name="ssid" value="{{WIFI_SSID}}" placeholder="Network SSID">
+        <input type="text" id="ssid" name="ssid" value="{{WIFI_SSID}}" placeholder="Network SSID" required>
       </div>
 
       <div class="form-group">
@@ -948,44 +947,14 @@ const char SETUP_HTML[] PROGMEM = R"rawliteral(
         <input type="password" id="password" name="password" placeholder="Leave blank if unchanged / open">
       </div>
 
-      <div class="section-title">2. MQTT Broker & LWT Settings</div>
-      <div class="form-row">
-        <div class="form-group">
-          <label for="devName">Device Name (tele/&lt;ID&gt;/LWT)</label>
-          <input type="text" id="devName" name="device_name" value="{{DEVICE_NAME}}" placeholder="pmon" required>
-        </div>
-        <div class="form-group">
-          <label for="mqttTopic">Base Topic</label>
-          <input type="text" id="mqttTopic" name="mqtt_topic" value="{{MQTT_TOPIC}}" placeholder="telescope/">
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label for="mqttServer">MQTT Broker Host / IP</label>
-          <input type="text" id="mqttServer" name="mqtt_server" value="{{MQTT_SERVER}}" placeholder="e.g. 192.168.0.2">
-        </div>
-        <div class="form-group">
-          <label for="mqttPort">Port</label>
-          <input type="number" id="mqttPort" name="mqtt_port" value="{{MQTT_PORT}}" placeholder="1883">
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label for="mqttUser">MQTT User (Optional)</label>
-          <input type="text" id="mqttUser" name="mqtt_user" value="{{MQTT_USER}}" placeholder="Optional">
-        </div>
-        <div class="form-group">
-          <label for="mqttPass">MQTT Pass (Optional)</label>
-          <input type="password" id="mqttPass" name="mqtt_pass" placeholder="Optional">
-        </div>
-      </div>
-
-      <button type="submit" class="btn-submit" id="btnSubmit">Save Configuration & Connect</button>
-      <div class="status-msg" id="statusMsg">Saving configuration to NVS and connecting...</div>
+      <button type="submit" class="btn-submit" id="btnSubmit">Save Wi-Fi & Reconnect</button>
+      <div class="status-msg" id="statusMsg">Saving Wi-Fi credentials to NVS and reconnecting...</div>
     </form>
-    <a href="/" class="nav-link">&larr; Return to Dashboard</a>
+
+    <div style="margin-top:1.5rem; border-top:1px solid var(--border-card); padding-top:1rem; display:flex; flex-direction:column; gap:0.6rem;">
+      <a href="/mqtt" class="nav-link nav-highlight">Configure MQTT & LWT Settings &rarr;</a>
+      <a href="/" class="nav-link">&larr; Return to Dashboard</a>
+    </div>
   </div>
 
   <script>
@@ -995,6 +964,148 @@ const char SETUP_HTML[] PROGMEM = R"rawliteral(
       }
     }
     document.getElementById('setupForm').addEventListener('submit', function() {
+      document.getElementById('btnSubmit').disabled = true;
+      document.getElementById('statusMsg').style.display = 'block';
+    });
+  </script>
+</body>
+</html>
+)rawliteral";
+
+const char MQTT_HTML[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MQTT Setup | 24V Power Monitor</title>
+  <style>
+    :root {
+      --bg-base: #0b0f19;
+      --bg-card: rgba(18, 26, 44, 0.9);
+      --border-card: rgba(255, 255, 255, 0.12);
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --cyan: #00d4ff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body {
+      background: radial-gradient(circle at 50% 0%, #172554 0%, var(--bg-base) 80%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.25rem;
+    }
+    .setup-box {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-card);
+      border-radius: 20px;
+      padding: 2rem;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    }
+    .header { text-align: center; margin-bottom: 1.5rem; }
+    .header h1 { font-size: 1.35rem; font-weight: 700; margin-bottom: 0.35rem; }
+    .header p { font-size: 0.85rem; color: var(--text-muted); }
+    .form-group { margin-bottom: 1rem; }
+    .form-row { display: grid; grid-template-columns: 2fr 1fr; gap: 0.75rem; }
+    label { display: block; font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.4rem; }
+    input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-card);
+      border-radius: 10px;
+      padding: 0.7rem 0.9rem;
+      color: #fff;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus { border-color: var(--cyan); }
+    .btn-submit {
+      width: 100%;
+      background: linear-gradient(135deg, #00d4ff, #2563eb);
+      border: none;
+      color: #fff;
+      font-weight: 600;
+      padding: 0.85rem;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      margin-top: 1rem;
+      box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+      transition: opacity 0.2s;
+    }
+    .btn-submit:hover { opacity: 0.9; }
+    .status-msg { margin-top: 1rem; text-align: center; font-size: 0.85rem; color: var(--cyan); display: none; }
+    .nav-link { display: block; text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted); text-decoration: none; }
+    .nav-link:hover { color: #fff; }
+    .nav-highlight { color: var(--cyan); font-weight: 600; }
+    .hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.25rem; }
+  </style>
+</head>
+<body>
+  <div class="setup-box">
+    <div class="header">
+      <div style="width:48px;height:48px;background:linear-gradient(135deg, #00d4ff, #2563eb);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;box-shadow:0 0 20px rgba(0,212,255,0.4);">
+        <svg style="width:24px;height:24px;fill:#fff;" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+      </div>
+      <h1>MQTT & LWT Configuration</h1>
+      <p>Telemetry Broker & Topic Settings</p>
+    </div>
+
+    <form method="POST" action="/save-mqtt" id="mqttForm">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="devName">Device Name</label>
+          <input type="text" id="devName" name="device_name" value="{{DEVICE_NAME}}" placeholder="pmon" required>
+          <div class="hint">LWT: tele/&lt;name&gt;/LWT</div>
+        </div>
+        <div class="form-group">
+          <label for="mqttTopic">Base Topic</label>
+          <input type="text" id="mqttTopic" name="mqtt_topic" value="{{MQTT_TOPIC}}" placeholder="telescope/">
+          <div class="hint">Prefix for telemetry</div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="mqttServer">MQTT Broker Host / IP</label>
+          <input type="text" id="mqttServer" name="mqtt_server" value="{{MQTT_SERVER}}" placeholder="e.g. 192.168.0.6">
+        </div>
+        <div class="form-group">
+          <label for="mqttPort">Port</label>
+          <input type="number" id="mqttPort" name="mqtt_port" value="{{MQTT_PORT}}" placeholder="1883">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="mqttUser">MQTT User</label>
+          <input type="text" id="mqttUser" name="mqtt_user" value="{{MQTT_USER}}" placeholder="Optional">
+        </div>
+        <div class="form-group">
+          <label for="mqttPass">MQTT Password</label>
+          <input type="password" id="mqttPass" name="mqtt_pass" placeholder="Leave blank if unchanged">
+        </div>
+      </div>
+
+      <button type="submit" class="btn-submit" id="btnSubmit">Save MQTT Settings</button>
+      <div class="status-msg" id="statusMsg">Saving MQTT settings and reconnecting broker...</div>
+    </form>
+
+    <div style="margin-top:1.5rem; border-top:1px solid var(--border-card); padding-top:1rem; display:flex; flex-direction:column; gap:0.6rem;">
+      <a href="/setup" class="nav-link nav-highlight">Configure Wi-Fi Connection &rarr;</a>
+      <a href="/" class="nav-link">&larr; Return to Dashboard</a>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('mqttForm').addEventListener('submit', function() {
       document.getElementById('btnSubmit').disabled = true;
       document.getElementById('statusMsg').style.display = 'block';
     });

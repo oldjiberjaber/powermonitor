@@ -17,7 +17,7 @@
 // ============================================================================
 // CONFIGURATION & PIN DEFINITIONS
 // ============================================================================
-#define FIRMWARE_VERSION "v1.9.1-RTOS"
+#define FIRMWARE_VERSION "v1.9.2-RTOS"
 
 #define I2C_SDA_PIN    8     // Default SDA
 #define I2C_SCL_PIN    9     // Default SCL
@@ -598,7 +598,7 @@ void handleReboot() {
   ESP.restart();
 }
 
-// Wi-Fi & MQTT Setup Handlers
+// Wi-Fi Setup Handlers
 void handleSetup() {
   int n = WiFi.scanNetworks();
   String options = "";
@@ -616,11 +616,6 @@ void handleSetup() {
   String html = String(SETUP_HTML);
   html.replace("{{NETWORKS}}", options);
   html.replace("{{WIFI_SSID}}", wifi_ssid_str);
-  html.replace("{{DEVICE_NAME}}", device_name);
-  html.replace("{{MQTT_SERVER}}", mqtt_server);
-  html.replace("{{MQTT_PORT}}", String(mqtt_port));
-  html.replace("{{MQTT_TOPIC}}", mqtt_topic);
-  html.replace("{{MQTT_USER}}", mqtt_user);
   server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   server.send(200, "text/html", html);
 }
@@ -639,6 +634,30 @@ void handleSaveWifi() {
     wifi_pass_str = new_pass;
   }
 
+  Serial.printf("[Config] Saved Wi-Fi SSID='%s'\n", wifi_ssid_str.c_str());
+
+  String resp = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'><meta http-equiv='refresh' content='10;url=/'><style>body{background:#0b0f19;color:#f1f5f9;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;}.card{background:rgba(18,26,44,0.9);padding:2rem;border-radius:16px;border:1px solid rgba(255,255,255,0.1);max-width:400px;box-shadow:0 10px 30px rgba(0,0,0,0.5);}h2{color:#00d4ff;margin-bottom:1rem;}p{color:#94a3b8;line-height:1.5;}</style></head><body><div class='card'><h2>Wi-Fi Credentials Saved!</h2><p>Connecting to <b>" + wifi_ssid_str + "</b>...</p><p>The monitor is reconnecting now. Page will reload in 10 seconds.</p></div></body></html>";
+
+  server.send(200, "text/html", resp);
+  delay(1500);
+  WiFi.disconnect(true);
+  delay(500);
+  ESP.restart();
+}
+
+// MQTT Setup Handlers
+void handleMqttSetup() {
+  String html = String(MQTT_HTML);
+  html.replace("{{DEVICE_NAME}}", device_name);
+  html.replace("{{MQTT_SERVER}}", mqtt_server);
+  html.replace("{{MQTT_PORT}}", String(mqtt_port));
+  html.replace("{{MQTT_TOPIC}}", mqtt_topic);
+  html.replace("{{MQTT_USER}}", mqtt_user);
+  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  server.send(200, "text/html", html);
+}
+
+void handleSaveMqtt() {
   if (server.hasArg("device_name")) {
     device_name = server.arg("device_name");
     device_name.trim();
@@ -674,16 +693,18 @@ void handleSaveWifi() {
     prefs.putString("mqtt_pass", mqtt_pass);
   }
 
-  Serial.printf("[Config] Saved Wi-Fi SSID='%s', Device='%s' & MQTT Server='%s:%d' (LWT: tele/%s/LWT)\n",
-                wifi_ssid_str.c_str(), device_name.c_str(), mqtt_server.c_str(), mqtt_port, device_name.c_str());
+  Serial.printf("[Config] Saved Device='%s' & MQTT Server='%s:%d' (Topic: %s%s, LWT: tele/%s/LWT)\n",
+                device_name.c_str(), mqtt_server.c_str(), mqtt_port, mqtt_topic.c_str(), device_name.c_str(), device_name.c_str());
 
-  String resp = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'><meta http-equiv='refresh' content='10;url=/'><style>body{background:#0b0f19;color:#f1f5f9;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;}.card{background:rgba(18,26,44,0.9);padding:2rem;border-radius:16px;border:1px solid rgba(255,255,255,0.1);max-width:400px;box-shadow:0 10px 30px rgba(0,0,0,0.5);}h2{color:#00d4ff;margin-bottom:1rem;}p{color:#94a3b8;line-height:1.5;}</style></head><body><div class='card'><h2>Configuration Saved!</h2><p>Connecting to <b>" + wifi_ssid_str + "</b>...</p><p>Device Name: <b>" + device_name + "</b> (LWT: <code>tele/" + device_name + "/LWT</code>)</p><p>The monitor is rebooting now.</p></div></body></html>";
+  // Force reconnect with new settings in TaskWeb
+  if (mqttClient.connected()) {
+    mqttClient.disconnect();
+  }
+  lastMqttReconnectAttempt = 0;
+
+  String resp = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'><meta http-equiv='refresh' content='4;url=/'><style>body{background:#0b0f19;color:#f1f5f9;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;}.card{background:rgba(18,26,44,0.9);padding:2rem;border-radius:16px;border:1px solid rgba(255,255,255,0.1);max-width:420px;box-shadow:0 10px 30px rgba(0,0,0,0.5);}h2{color:#00d4ff;margin-bottom:1rem;}p{color:#94a3b8;line-height:1.5;}.btn{display:inline-block;margin-top:1.25rem;padding:0.6rem 1.2rem;background:#00d4ff;color:#0b0f19;text-decoration:none;border-radius:8px;font-weight:600;}</style></head><body><div class='card'><h2>MQTT Settings Saved!</h2><p>Device Name: <b>" + device_name + "</b></p><p>Broker: <b>" + mqtt_server + ":" + String(mqtt_port) + "</b></p><p>Base Topic: <b>" + mqtt_topic + "</b></p><p>LWT Topic: <code>tele/" + device_name + "/LWT</code></p><p>Reconnecting to broker... Returning to dashboard in 4 seconds.</p><a href='/' class='btn'>Back to Dashboard</a></div></body></html>";
 
   server.send(200, "text/html", resp);
-  delay(1500);
-  WiFi.disconnect(true);
-  delay(500);
-  ESP.restart();
 }
 
 void handleCaptiveRedirect() {
@@ -947,6 +968,8 @@ void setup() {
   server.on("/", HTTP_GET, handleRoot);
   server.on("/setup", HTTP_GET, handleSetup);
   server.on("/save-wifi", HTTP_POST, handleSaveWifi);
+  server.on("/mqtt", HTTP_GET, handleMqttSetup);
+  server.on("/save-mqtt", HTTP_POST, handleSaveMqtt);
   server.on("/api/data", HTTP_GET, handleApiData);
   server.on("/api/reset-energy", HTTP_POST, handleResetEnergy);
   server.on("/api/reset-stats", HTTP_POST, handleResetStats);
